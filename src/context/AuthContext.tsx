@@ -9,6 +9,7 @@ interface AuthContextValue {
   profile: Profile | null;
   role: UserRole | null;
   loading: boolean;
+  profileLoaded: boolean;
   passwordRecovery: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, metadata: Record<string, string>) => Promise<{ error: string | null }>;
@@ -24,6 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [passwordRecovery, setPasswordRecovery] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
   const fetchProfile = async (uid: string) => {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', uid).maybeSingle();
@@ -31,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Failed to load user profile', error);
     }
     setProfile(data as Profile | null);
+    setProfileLoaded(true);
   };
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.session?.user) {
         fetchProfile(data.session.user.id).finally(() => setLoading(false));
       } else {
+        setProfileLoaded(true);
         setLoading(false);
       }
     });
@@ -51,12 +55,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (event === 'SIGNED_OUT') {
           setSession(null);
           setProfile(null);
+          setProfileLoaded(false);
         } else {
           setSession(newSession);
           if (newSession?.user) {
+            setProfileLoaded(false);
             await fetchProfile(newSession.user.id);
           } else {
             setProfile(null);
+            setProfileLoaded(true);
           }
         }
       })();
@@ -109,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
+    setProfileLoaded(false);
     setPasswordRecovery(false);
   };
 
@@ -120,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         profile,
         role: profile?.role ?? null,
         loading,
+        profileLoaded,
         passwordRecovery,
         signIn,
         signUp,

@@ -48,7 +48,7 @@ export function LoginPage() {
       const { error } = await resetPassword(email);
       setLoading(false);
       if (error) {
-        setError('Could not send reset link. Please check the email and try again.');
+        setError(error);
       } else {
         setInfo('A password reset link has been sent to your email. Click the link in the email to set a new password.');
       }
