@@ -10,6 +10,7 @@ export type Route =
   | { name: 'transactions' }
   | { name: 'susu' }
   | { name: 'field-agents' }
+  | { name: 'assignments' }
   | { name: 'calculator' }
   | { name: 'reports' }
   | { name: 'settings' }
@@ -40,6 +41,8 @@ export function parseHash(hash: string): Route {
       return { name: 'susu' };
     case 'field-agents':
       return { name: 'field-agents' };
+    case 'assignments':
+      return { name: 'assignments' };
     case 'calculator':
       return { name: 'calculator' };
     case 'reports':

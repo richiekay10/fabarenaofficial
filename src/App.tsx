@@ -10,6 +10,7 @@ import { RepaymentsPage } from '@/pages/RepaymentsPage';
 import { TransactionsPage } from '@/pages/TransactionsPage';
 import { SusuCollectionsPage } from '@/pages/SusuCollectionsPage';
 import { FieldAgentsPage } from '@/pages/FieldAgentsPage';
+import { AssignmentsPage } from '@/pages/AssignmentsPage';
 import { CalculatorPage } from '@/pages/CalculatorPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -41,6 +42,8 @@ function AdminRoutes() {
       return <SusuCollectionsPage />;
     case 'field-agents':
       return <FieldAgentsPage />;
+    case 'assignments':
+      return <AssignmentsPage />;
     case 'calculator':
       return <CalculatorPage />;
     case 'reports':

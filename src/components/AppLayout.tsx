@@ -14,6 +14,7 @@ import {
   ArrowLeftRight,
   PiggyBank,
   UserCog,
+  UserPlus,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRoute, navigate, type Route } from '@/lib/router';
@@ -34,6 +35,7 @@ const navItems: NavItem[] = [
   { label: 'Transactions', icon: ArrowLeftRight, route: { name: 'transactions' }, path: '/transactions', match: ['transactions'] },
   { label: 'Susu Collections', icon: PiggyBank, route: { name: 'susu' }, path: '/susu', match: ['susu'] },
   { label: 'Field Agents', icon: UserCog, route: { name: 'field-agents' }, path: '/field-agents', match: ['field-agents'] },
+  { label: 'Assignments', icon: UserPlus, route: { name: 'assignments' }, path: '/assignments', match: ['assignments'] },
   { label: 'Calculator', icon: Calculator, route: { name: 'calculator' }, path: '/calculator', match: ['calculator'] },
   { label: 'Reports', icon: BarChart3, route: { name: 'reports' }, path: '/reports', match: ['reports'] },
   { label: 'Settings', icon: Settings, route: { name: 'settings' }, path: '/settings', match: ['settings'] },

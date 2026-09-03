@@ -25,6 +25,7 @@ export interface Customer {
   monthly_income: number | null;
   status: CustomerStatus;
   notes: string | null;
+  field_agent_id: string | null;
   created_at: string;
   updated_at: string;
 }
