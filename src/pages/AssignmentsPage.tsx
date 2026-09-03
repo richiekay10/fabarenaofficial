@@ -5,6 +5,7 @@ import type { Customer, FieldAgent } from '@/lib/types';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
 import { initials, formatDateTime } from '@/lib/format';
+import { navigate } from '@/lib/router';
 
 interface CustomerWithAgent extends Customer {
   field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null;
@@ -155,7 +156,12 @@ export function AssignmentsPage() {
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">
                           {initials(c.full_name)}
                         </div>
-                        <span className="font-medium text-slate-800">{c.full_name}</span>
+                        <button
+                          onClick={() => navigate(`/customers/${c.id}`)}
+                          className="font-medium text-slate-800 hover:text-primary-600 transition"
+                        >
+                          {c.full_name}
+                        </button>
                       </div>
                     </td>
                     <td className="table-cell text-slate-700">{c.phone}</td>

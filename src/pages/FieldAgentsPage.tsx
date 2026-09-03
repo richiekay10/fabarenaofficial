@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserCog, Plus, Search, Trash2, Phone, MapPin, Mail } from 'lucide-react';
+import { UserCog, Plus, Search, Trash2, Phone, MapPin, Mail, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { FieldAgent, AgentStatus } from '@/lib/types';
 import { formatDateTime, formatCurrency } from '@/lib/format';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
 import { Input, Select } from '@/components/ui/Input';
+import { navigate } from '@/lib/router';
 
 interface AgentFormData {
   full_name: string;
@@ -189,6 +190,14 @@ export function FieldAgentsPage() {
               </div>
 
               <p className="mt-3 text-[10px] text-slate-400 text-center">Joined {formatDateTime(agent.created_at)}</p>
+
+              <button
+                onClick={() => navigate(`/assignments`)}
+                className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-primary-50 hover:text-primary-700 transition"
+              >
+                <Users size={14} />
+                View Assignments
+              </button>
             </div>
           ))}
         </div>

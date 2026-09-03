@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, PiggyBank, ArrowLeftRight } from 'lucide-react';
+import { Users, Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, PiggyBank, ArrowLeftRight, UserPlus, CreditCard, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, formatDate, formatDateTime, loanTotalPayable } from '@/lib/format';
 import { StatCard, Spinner, EmptyState } from '@/components/ui/StatCard';
@@ -138,32 +138,62 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Quick actions */}
+      <div className="flex flex-wrap gap-3">
+        <button onClick={() => navigate('/customers')} className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 transition shadow-sm">
+          <Users size={16} />
+          Add Customer
+        </button>
+        <button onClick={() => navigate('/loans')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm">
+          <Wallet size={16} />
+          New Loan
+        </button>
+        <button onClick={() => navigate('/repayments')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm">
+          <CreditCard size={16} />
+          Record Payment
+        </button>
+        <button onClick={() => navigate('/assignments')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm">
+          <UserPlus size={16} />
+          Assign Agent
+        </button>
+        <button onClick={() => navigate('/susu')} className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition shadow-sm">
+          <PiggyBank size={16} />
+          Susu Collection
+        </button>
+      </div>
+
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          label="Total Customers"
-          value={data.totalCustomers.toString()}
-          icon={<Users size={24} />}
-          color="blue"
-        />
-        <StatCard
-          label="Active Loans"
-          value={data.activeLoans.toString()}
-          icon={<Wallet size={24} />}
-          color="green"
-        />
+        <button onClick={() => navigate('/customers')} className="text-left">
+          <StatCard
+            label="Total Customers"
+            value={data.totalCustomers.toString()}
+            icon={<Users size={24} />}
+            color="blue"
+          />
+        </button>
+        <button onClick={() => navigate('/loans')} className="text-left">
+          <StatCard
+            label="Active Loans"
+            value={data.activeLoans.toString()}
+            icon={<Wallet size={24} />}
+            color="green"
+          />
+        </button>
         <StatCard
           label="Total Disbursed"
           value={formatCurrency(data.totalDisbursed)}
           icon={<TrendingUp size={24} />}
           color="amber"
         />
-        <StatCard
-          label="Outstanding"
-          value={formatCurrency(data.outstandingAmount)}
-          icon={<AlertTriangle size={24} />}
-          color="red"
-        />
+        <button onClick={() => navigate('/repayments')} className="text-left">
+          <StatCard
+            label="Outstanding"
+            value={formatCurrency(data.outstandingAmount)}
+            icon={<AlertTriangle size={24} />}
+            color="red"
+          />
+        </button>
       </div>
 
       {/* Second row: cash flow + susu */}

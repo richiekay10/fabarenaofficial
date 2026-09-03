@@ -288,9 +288,13 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
 
   return (
     <div className="space-y-5">
-      <button onClick={() => navigate('/customers')} className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1">
-        ← Back to Customers
-      </button>
+      <div className="flex items-center gap-2 text-sm text-slate-400">
+        <button onClick={() => navigate('/dashboard')} className="hover:text-slate-600 transition">Dashboard</button>
+        <span>/</span>
+        <button onClick={() => navigate('/customers')} className="hover:text-slate-600 transition">Customers</button>
+        <span>/</span>
+        <span className="text-slate-600 font-medium">{customer.full_name}</span>
+      </div>
 
       {/* Profile header */}
       <div className="card p-6">

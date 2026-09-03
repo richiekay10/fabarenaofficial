@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Wallet, Plus, Search, Pencil, Trash2, Eye, ArrowLeft, TrendingUp, Calendar } from 'lucide-react';
+import { Wallet, Plus, Search, Pencil, Trash2, Eye, TrendingUp, Calendar } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Loan, LoanStatus, Repayment } from '@/lib/types';
 import { formatCurrency, formatDate, formatDateTime, loanTotalPayable, loanMonthlyPayment } from '@/lib/format';
@@ -315,10 +315,13 @@ export function LoanDetailPage({ loanId }: { loanId: string }) {
 
   return (
     <div className="space-y-5">
-      <button onClick={() => navigate('/loans')} className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1">
-        <ArrowLeft size={16} />
-        Back to Loans
-      </button>
+      <div className="flex items-center gap-2 text-sm text-slate-400">
+        <button onClick={() => navigate('/dashboard')} className="hover:text-slate-600 transition">Dashboard</button>
+        <span>/</span>
+        <button onClick={() => navigate('/loans')} className="hover:text-slate-600 transition">Loans</button>
+        <span>/</span>
+        <span className="text-slate-600 font-medium">{loan.loan_number}</span>
+      </div>
 
       {/* Loan header */}
       <div className="card p-6">
