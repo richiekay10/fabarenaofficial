@@ -36,6 +36,7 @@ export function AgentCollectionsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [formData, setFormData] = useState<CollectionFormData>(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SusuCollectionWithDetails | null>(null);
 
   const load = useCallback(async () => {
@@ -85,28 +86,50 @@ export function AgentCollectionsPage() {
   };
 
   const handleSubmit = async () => {
+    setFormError(null);
     if (!profile) return;
     const account = accounts.find((a) => a.id === formData.susu_account_id);
-    if (!account) return;
+    if (!account) {
+      setFormError('Please select a susu account.');
+      return;
+    }
+    const amount = parseFloat(formData.amount);
+    if (isNaN(amount) || amount <= 0) {
+      setFormError('Please enter a valid amount greater than zero.');
+      return;
+    }
+    if (!formData.collection_date) {
+      setFormError('Please select a collection date.');
+      return;
+    }
 
     setSubmitting(true);
-    await supabase.from('susu_collections').insert({
+    const { error } = await supabase.from('susu_collections').insert({
       susu_account_id: formData.susu_account_id,
       field_agent_id: profile.id,
       customer_id: account.customer_id,
-      amount: parseFloat(formData.amount),
+      amount,
       collection_date: formData.collection_date,
       method: formData.method,
       notes: formData.notes || null,
     });
     setSubmitting(false);
+    if (error) {
+      setFormError('Could not save the collection. Please try again.');
+      return;
+    }
     setModalOpen(false);
     load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await supabase.from('susu_collections').delete().eq('id', deleteTarget.id);
+    const { error } = await supabase.from('susu_collections').delete().eq('id', deleteTarget.id);
+    if (error) {
+      setFormError('Could not delete the collection. Please try again.');
+      setDeleteTarget(null);
+      return;
+    }
     setDeleteTarget(null);
     load();
   };
@@ -198,8 +221,13 @@ export function AgentCollectionsPage() {
         )}
       </div>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Record Susu Collection" size="md">
+      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setFormError(null); }} title="Record Susu Collection" size="md">
         <div className="space-y-4">
+          {formError && (
+            <div className="rounded-lg bg-error-50 border border-error-200 px-4 py-2.5 text-sm text-error-700">
+              {formError}
+            </div>
+          )}
           <Select
             label="Susu Account *"
             value={formData.susu_account_id}

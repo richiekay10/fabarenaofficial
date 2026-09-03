@@ -41,7 +41,7 @@ const navItems: NavItem[] = [
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const route = useRoute();
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const currentPath = route.name;
@@ -93,7 +93,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
               {(user?.email ?? 'A')[0].toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-white truncate">{user?.email}</p>
+              <p className="text-xs font-medium text-white truncate">{profile?.full_name ?? user?.email}</p>
               <p className="text-[10px] text-slate-400">Administrator</p>
             </div>
           </div>

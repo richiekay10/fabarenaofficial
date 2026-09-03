@@ -11,6 +11,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -26,7 +27,8 @@ export function SettingsPage() {
   const handleSave = async () => {
     if (!settings) return;
     setSaving(true);
-    await supabase.from('settings').update({
+    setSaveError(false);
+    const { error } = await supabase.from('settings').update({
       company_name: settings.company_name,
       company_email: settings.company_email,
       company_phone: settings.company_phone,
@@ -35,8 +37,12 @@ export function SettingsPage() {
       currency: settings.currency,
     }).eq('id', 1);
     setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (error) {
+      setSaveError(true);
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   };
 
   if (loading) {
@@ -110,6 +116,12 @@ export function SettingsPage() {
             <span className="flex items-center gap-1.5 text-sm text-accent-600 animate-fade-in">
               <Check size={16} />
               Saved successfully
+            </span>
+          )}
+          {saveError && (
+            <span className="flex items-center gap-1.5 text-sm text-error-600 animate-fade-in">
+              <Check size={16} />
+              Could not save changes
             </span>
           )}
           <Button onClick={handleSave} disabled={saving}>

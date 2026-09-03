@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { Building2, Lock, Mail, Loader2, TrendingUp, Users, Wallet, ShieldCheck, Eye, EyeOff, ArrowLeft, CheckCircle2, KeyRound, UserCog, User } from 'lucide-react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { Building2, Lock, Mail, Loader2, TrendingUp, Users, Wallet, ShieldCheck, Eye, EyeOff, ArrowLeft, CheckCircle2, KeyRound, UserCog, User, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
@@ -24,17 +24,19 @@ export function LoginPage() {
   const [zone, setZone] = useState('');
   const [adminSlotsAvailable, setAdminSlotsAvailable] = useState<number | null>(null);
 
-  // If Supabase detected a password recovery session, show the reset form
-  if (passwordRecovery && view !== 'reset') {
-    setView('reset');
-  }
+  useEffect(() => {
+    if (passwordRecovery) setView('reset');
+  }, [passwordRecovery]);
 
-  const checkAdminSlots = async () => {
-    const { data } = await supabase.rpc('get_admin_count');
-    if (data !== null && data !== undefined) {
-      setAdminSlotsAvailable(Math.max(0, 3 - data));
+  useEffect(() => {
+    if (view === 'signup' && signupRole === 'admin') {
+      supabase.rpc('get_admin_count').then(({ data }) => {
+        if (data !== null && data !== undefined) {
+          setAdminSlotsAvailable(Math.max(0, 3 - data));
+        }
+      });
     }
-  };
+  }, [view, signupRole]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,7 +48,7 @@ export function LoginPage() {
       const { error } = await resetPassword(email);
       setLoading(false);
       if (error) {
-        setError(error);
+        setError('Could not send reset link. Please check the email and try again.');
       } else {
         setInfo('A password reset link has been sent to your email. Click the link in the email to set a new password.');
       }
@@ -66,7 +68,7 @@ export function LoginPage() {
       const { error } = await updatePassword(password);
       setLoading(false);
       if (error) {
-        setError(error);
+        setError('Could not update your password. Please try again.');
       } else {
         setInfo('Your password has been updated successfully. You can now sign in.');
         setView('signin');
@@ -79,6 +81,14 @@ export function LoginPage() {
     if (view === 'signup') {
       if (!fullName.trim()) {
         setError('Please enter your full name.');
+        return;
+      }
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters long.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.');
         return;
       }
       if (signupRole === 'agent' && !phone.trim()) {
@@ -94,11 +104,21 @@ export function LoginPage() {
       });
       setLoading(false);
       if (error) {
-        setError(error);
+        if (error.includes('Maximum number of administrators')) {
+          setError('All 3 administrator slots are filled. Please sign up as a field agent instead.');
+        } else if (error.includes('already registered') || error.includes('already been registered')) {
+          setError('An account with this email already exists. Please sign in instead.');
+        } else {
+          setError('Could not create your account. Please check your details and try again.');
+        }
       } else {
         setInfo('Account created successfully. You can now sign in.');
         setView('signin');
         setPassword('');
+        setConfirmPassword('');
+        setFullName('');
+        setPhone('');
+        setZone('');
       }
       return;
     }
@@ -108,9 +128,17 @@ export function LoginPage() {
     const { error } = await signIn(email, password);
     setLoading(false);
     if (error) {
-      setError(error);
+      setError('Invalid email or password. Please check your credentials and try again.');
     }
   };
+
+  const switchView = (v: View) => {
+    setView(v);
+    setError(null);
+    setInfo(null);
+  };
+
+  const adminDisabled = view === 'signup' && signupRole === 'admin' && adminSlotsAvailable === 0;
 
   return (
     <div className="min-h-screen flex">
@@ -176,7 +204,7 @@ export function LoginPage() {
           {/* Back button for sub-views */}
           {(view === 'forgot' || view === 'reset') && (
             <button
-              onClick={() => { setView('signin'); setError(null); setInfo(null); }}
+              onClick={() => switchView('signin')}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-6 transition"
             >
               <ArrowLeft size={16} />
@@ -220,8 +248,9 @@ export function LoginPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setSignupRole('admin'); setError(null); checkAdminSlots(); }}
-                    className={`flex flex-col items-center gap-2 px-4 py-4 rounded-lg border-2 transition ${signupRole === 'admin' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                    onClick={() => { setSignupRole('admin'); setError(null); }}
+                    disabled={adminSlotsAvailable === 0}
+                    className={`flex flex-col items-center gap-2 px-4 py-4 rounded-lg border-2 transition ${signupRole === 'admin' ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'} ${adminSlotsAvailable === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <User size={22} />
                     <span className="font-medium text-sm">Administrator</span>
@@ -230,10 +259,12 @@ export function LoginPage() {
                 </div>
 
                 {signupRole === 'admin' && adminSlotsAvailable !== null && (
-                  <p className={`text-xs text-center ${adminSlotsAvailable > 0 ? 'text-slate-500' : 'text-error-600'}`}>
-                    {adminSlotsAvailable > 0
-                      ? `${adminSlotsAvailable} admin slot${adminSlotsAvailable === 1 ? '' : 's'} remaining (max 3)`
-                      : 'All 3 admin slots are filled. Please sign up as a field agent.'}
+                  <p className={`text-xs text-center flex items-center justify-center gap-1.5 ${adminSlotsAvailable > 0 ? 'text-slate-500' : 'text-error-600'}`}>
+                    {adminSlotsAvailable > 0 ? (
+                      <><ShieldCheck size={12} /> {adminSlotsAvailable} admin slot{adminSlotsAvailable === 1 ? '' : 's'} remaining (max 3)</>
+                    ) : (
+                      <><AlertCircle size={12} /> All 3 admin slots are filled. Please sign up as a field agent.</>
+                    )}
                   </p>
                 )}
 
@@ -301,9 +332,10 @@ export function LoginPage() {
               </div>
             )}
 
-            {view === 'reset' && (
+            {/* Confirm password for signup and reset */}
+            {(view === 'signup' || view === 'reset') && (
               <div>
-                <label className="input-label">Confirm new password</label>
+                <label className="input-label">Confirm password</label>
                 <div className="relative">
                   <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
@@ -347,15 +379,16 @@ export function LoginPage() {
             )}
 
             {error && (
-              <div className="rounded-lg bg-error-50 border border-error-200 px-4 py-2.5 text-sm text-error-700">
-                {error}
+              <div className="rounded-lg bg-error-50 border border-error-200 px-4 py-2.5 text-sm text-error-700 flex items-start gap-2">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
               </div>
             )}
 
             <button
               type="submit"
-              disabled={loading || (view === 'signup' && signupRole === 'admin' && adminSlotsAvailable === 0)}
-              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 active:bg-primary-800 transition disabled:opacity-50"
+              disabled={loading || adminDisabled}
+              className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-700 active:bg-primary-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading && <Loader2 size={18} className="animate-spin" />}
               {view === 'signin' && 'Sign in'}
@@ -368,7 +401,7 @@ export function LoginPage() {
           {view === 'signin' && (
             <div className="mt-4 text-right">
               <button
-                onClick={() => { setView('forgot'); setError(null); setInfo(null); }}
+                onClick={() => switchView('forgot')}
                 className="text-sm text-primary-600 hover:text-primary-700 font-medium"
               >
                 Forgot your password?
@@ -380,11 +413,7 @@ export function LoginPage() {
             <p className="mt-6 text-center text-sm text-slate-500">
               {view === 'signin' ? "Don't have an account? " : 'Already have an account? '}
               <button
-                onClick={() => {
-                  setView(view === 'signin' ? 'signup' : 'signin');
-                  setError(null);
-                  setInfo(null);
-                }}
+                onClick={() => switchView(view === 'signin' ? 'signup' : 'signin')}
                 className="font-medium text-primary-600 hover:text-primary-700"
               >
                 {view === 'signin' ? 'Sign up' : 'Sign in'}

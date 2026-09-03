@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { StatCard, Spinner, EmptyState } from '@/components/ui/StatCard';
-import { Badge } from '@/components/ui/Badge';
 import { navigate } from '@/lib/router';
 
 interface AgentData {

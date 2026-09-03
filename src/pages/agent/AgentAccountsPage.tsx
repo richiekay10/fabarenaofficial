@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Search, Calendar, Phone, PiggyBank } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import type { SusuAccountWithDetails, SusuCollectionWithDetails } from '@/lib/types';
+import type { SusuAccountWithDetails } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
 import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
@@ -11,7 +11,6 @@ import { navigate } from '@/lib/router';
 export function AgentAccountsPage() {
   const { profile } = useAuth();
   const [accounts, setAccounts] = useState<(SusuAccountWithDetails & { _collected?: number; _collectionCount?: number })[]>([]);
-  const [collections, setCollections] = useState<SusuCollectionWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -29,7 +28,7 @@ export function AgentAccountsPage() {
     ]);
 
     const accs = (accRes.data as SusuAccountWithDetails[]) ?? [];
-    const colls = (collRes.data as SusuCollectionWithDetails[]) ?? [];
+    const colls = (collRes.data as { susu_account_id: string; amount: number }[]) ?? [];
 
     const collByAccount: Record<string, { total: number; count: number }> = {};
     for (const c of colls) {
@@ -43,7 +42,6 @@ export function AgentAccountsPage() {
       _collected: collByAccount[a.id]?.total ?? 0,
       _collectionCount: collByAccount[a.id]?.count ?? 0,
     })));
-    setCollections(colls);
     setLoading(false);
   }, [profile]);
 

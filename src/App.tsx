@@ -73,6 +73,9 @@ function AppContent() {
 
   if (!session || passwordRecovery) return <LoginPage />;
 
+  // Profile not loaded yet — show spinner while we fetch the user's role
+  if (role === null) return <FullPageSpinner />;
+
   if (role === 'agent') {
     return (
       <AgentLayout>

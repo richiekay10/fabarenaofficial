@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserCog, Plus, Search, Trash2, Phone, MapPin, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { FieldAgent, AgentStatus } from '@/lib/types';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatCurrency } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
@@ -89,8 +89,9 @@ export function FieldAgentsPage() {
   };
 
   const handleSubmit = async () => {
+    if (!formData.full_name.trim() || !formData.phone.trim()) return;
     setSubmitting(true);
-    await supabase.from('field_agents').insert({
+    const { error } = await supabase.from('field_agents').insert({
       full_name: formData.full_name,
       phone: formData.phone,
       email: formData.email || null,
@@ -98,13 +99,15 @@ export function FieldAgentsPage() {
       status: formData.status,
     });
     setSubmitting(false);
+    if (error) return;
     setModalOpen(false);
     load();
   };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    await supabase.from('field_agents').delete().eq('id', deleteTarget.id);
+    const { error } = await supabase.from('field_agents').delete().eq('id', deleteTarget.id);
+    if (error) return;
     setDeleteTarget(null);
     load();
   };
@@ -114,7 +117,7 @@ export function FieldAgentsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatCard label="Total Agents" value={agents.length.toString()} icon={<UserCog size={24} />} color="blue" />
         <StatCard label="Active Agents" value={activeCount.toString()} icon={<UserCog size={24} />} color="green" />
-        <StatCard label="Total Susu Collected" value={formatCurrencyGHS(totalCollected)} icon={<UserCog size={24} />} color="amber" />
+        <StatCard label="Total Susu Collected" value={formatCurrency(totalCollected)} icon={<UserCog size={24} />} color="amber" />
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -180,7 +183,7 @@ export function FieldAgentsPage() {
                   <p className="text-[10px] text-slate-500">Accounts</p>
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-accent-600">{formatCurrencyGHS(agent._stats?.totalAmount ?? 0)}</p>
+                  <p className="text-sm font-bold text-accent-600">{formatCurrency(agent._stats?.totalAmount ?? 0)}</p>
                   <p className="text-[10px] text-slate-500">Collected</p>
                 </div>
               </div>
@@ -250,6 +253,3 @@ export function FieldAgentsPage() {
   );
 }
 
-function formatCurrencyGHS(amount: number): string {
-  return new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
-}
