@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Users, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Eye } from 'lucide-react';
+import { Users, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Eye, UserCog } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { Customer, CustomerStatus } from '@/lib/types';
+import type { Customer, CustomerStatus, FieldAgent } from '@/lib/types';
 import { formatCurrency, formatDate, formatDateTime, initials } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -16,8 +16,12 @@ const statusColors: Record<CustomerStatus, 'green' | 'slate' | 'red'> = {
   blacklisted: 'red',
 };
 
+interface CustomerWithAgent extends Customer {
+  field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null;
+}
+
 export function CustomersPage() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -29,7 +33,7 @@ export function CustomersPage() {
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('customers').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase.from('customers').select('*, field_agents(id, full_name, zone)').order('created_at', { ascending: false });
     setCustomers(data ?? []);
     setLoading(false);
   }, []);
@@ -141,6 +145,7 @@ export function CustomersPage() {
                   <th className="table-header">Occupation</th>
                   <th className="table-header">Income</th>
                   <th className="table-header">Status</th>
+                  <th className="table-header">Agent</th>
                   <th className="table-header">Date Added</th>
                   <th className="table-header text-right">Actions</th>
                 </tr>
@@ -171,6 +176,16 @@ export function CustomersPage() {
                       <Badge color={statusColors[c.status]}>
                         {c.status}
                       </Badge>
+                    </td>
+                    <td className="table-cell">
+                      {c.field_agents ? (
+                        <div className="flex items-center gap-1.5">
+                          <UserCog size={14} className="text-slate-400" />
+                          <span className="text-sm text-slate-700">{c.field_agents.full_name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">Unassigned</span>
+                      )}
                     </td>
                     <td className="table-cell text-slate-500">{formatDateTime(c.created_at)}</td>
                     <td className="table-cell">

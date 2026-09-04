@@ -16,7 +16,8 @@ export type Route =
   | { name: 'settings' }
   | { name: 'agent-dashboard' }
   | { name: 'agent-collections' }
-  | { name: 'agent-accounts' };
+  | { name: 'agent-accounts' }
+  | { name: 'agent-add-customer' };
 
 export function parseHash(hash: string): Route {
   const clean = hash.replace(/^#\/?/, '');
@@ -55,6 +56,8 @@ export function parseHash(hash: string): Route {
       return { name: 'agent-collections' };
     case 'agent-accounts':
       return { name: 'agent-accounts' };
+    case 'agent-add-customer':
+      return { name: 'agent-add-customer' };
     default:
       return { name: 'dashboard' };
   }

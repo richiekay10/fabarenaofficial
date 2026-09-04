@@ -17,6 +17,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { AgentDashboardPage } from '@/pages/agent/AgentDashboardPage';
 import { AgentCollectionsPage } from '@/pages/agent/AgentCollectionsPage';
 import { AgentAccountsPage } from '@/pages/agent/AgentAccountsPage';
+import { AgentAddCustomerPage } from '@/pages/agent/AgentAddCustomerPage';
 import { FullPageSpinner } from '@/components/ui/StatCard';
 import { AlertCircle } from 'lucide-react';
 
@@ -65,6 +66,8 @@ function AgentRoutes() {
       return <AgentCollectionsPage />;
     case 'agent-accounts':
       return <AgentAccountsPage />;
+    case 'agent-add-customer':
+      return <AgentAddCustomerPage />;
     default:
       return <AgentDashboardPage />;
   }

@@ -7,6 +7,7 @@ import {
   LogOut,
   Menu,
   X,
+  UserPlus,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRoute, navigate, type Route } from '@/lib/router';
@@ -23,6 +24,7 @@ const navItems: NavItem[] = [
   { label: 'My Dashboard', icon: LayoutDashboard, route: { name: 'agent-dashboard' }, path: '/agent-dashboard', match: ['agent-dashboard'] },
   { label: 'My Collections', icon: PiggyBank, route: { name: 'agent-collections' }, path: '/agent-collections', match: ['agent-collections'] },
   { label: 'My Accounts', icon: ClipboardList, route: { name: 'agent-accounts' }, path: '/agent-accounts', match: ['agent-accounts'] },
+  { label: 'Add Customer', icon: UserPlus, route: { name: 'agent-add-customer' }, path: '/agent-add-customer', match: ['agent-add-customer'] },
 ];
 
 export function AgentLayout({ children }: { children: ReactNode }) {
