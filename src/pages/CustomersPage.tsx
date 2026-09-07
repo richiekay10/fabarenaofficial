@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Users, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Eye, UserCog } from 'lucide-react';
+import { Users, Plus, Search, Pencil, Trash2, Phone, Mail, MapPin, Eye, UserCog, PiggyBank, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { Customer, CustomerStatus, FieldAgent } from '@/lib/types';
+import type { Customer, CustomerStatus, FieldAgent, Transaction } from '@/lib/types';
 import { formatCurrency, formatDate, formatDateTime, initials } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner, EmptyState } from '@/components/ui/StatCard';
 import { CustomerForm, emptyCustomerForm, customerToForm, type CustomerFormData } from '@/components/forms/CustomerForm';
+import { Input, Select } from '@/components/ui/Input';
 import { navigate } from '@/lib/router';
 
 const statusColors: Record<CustomerStatus, 'green' | 'slate' | 'red'> = {
@@ -20,8 +21,12 @@ interface CustomerWithAgent extends Customer {
   field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null;
 }
 
+interface CustomerWithSavings extends CustomerWithAgent {
+  total_savings?: number;
+}
+
 export function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerWithAgent[]>([]);
+  const [customers, setCustomers] = useState<CustomerWithSavings[]>([]);
   const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -34,11 +39,20 @@ export function CustomersPage() {
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
-    const [custRes, agentRes] = await Promise.all([
+    const [custRes, agentRes, savingsRes] = await Promise.all([
       supabase.from('customers').select('*, field_agents(id, full_name, zone)').order('created_at', { ascending: false }),
       supabase.from('field_agents').select('*').eq('status', 'active').order('full_name'),
+      supabase.from('customer_savings').select('*'),
     ]);
-    setCustomers(custRes.data ?? []);
+    const savingsMap = new Map<string, number>();
+    for (const s of savingsRes.data ?? []) {
+      savingsMap.set((s as { customer_id: string; total_savings: number }).customer_id, Number((s as { total_savings: number }).total_savings));
+    }
+    const customersWithSavings = ((custRes.data as CustomerWithAgent[]) ?? []).map((c) => ({
+      ...c,
+      total_savings: savingsMap.get(c.id) ?? 0,
+    }));
+    setCustomers(customersWithSavings);
     setFieldAgents(agentRes.data ?? []);
     setLoading(false);
   }, []);
@@ -149,7 +163,7 @@ export function CustomersPage() {
                   <th className="table-header">Customer</th>
                   <th className="table-header">Contact</th>
                   <th className="table-header">Occupation</th>
-                  <th className="table-header">Income</th>
+                  <th className="table-header">Savings</th>
                   <th className="table-header">Status</th>
                   <th className="table-header">Agent</th>
                   <th className="table-header">Date Added</th>
@@ -164,12 +178,17 @@ export function CustomersPage() {
                         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-semibold">
                           {initials(c.full_name)}
                         </div>
-                        <button
-                          onClick={() => navigate(`/customers/${c.id}`)}
-                          className="font-medium text-slate-800 hover:text-primary-600 transition text-left"
-                        >
-                          {c.full_name}
-                        </button>
+                        <div>
+                          <button
+                            onClick={() => navigate(`/customers/${c.id}`)}
+                            className="font-medium text-slate-800 hover:text-primary-600 transition text-left"
+                          >
+                            {c.full_name}
+                          </button>
+                          {c.customer_number && (
+                            <p className="text-xs text-slate-400">{c.customer_number}</p>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="table-cell">
@@ -177,7 +196,11 @@ export function CustomersPage() {
                       <div className="text-xs text-slate-400">{c.email ?? '—'}</div>
                     </td>
                     <td className="table-cell">{c.occupation ?? '—'}</td>
-                    <td className="table-cell">{c.monthly_income ? formatCurrency(Number(c.monthly_income)) : '—'}</td>
+                    <td className="table-cell">
+                      <span className={`font-semibold ${Number(c.total_savings) > 0 ? 'text-accent-600' : 'text-slate-400'}`}>
+                        {formatCurrency(Number(c.total_savings) || 0)}
+                      </span>
+                    </td>
                     <td className="table-cell">
                       <Badge color={statusColors[c.status]}>
                         {c.status}
@@ -245,22 +268,32 @@ export function CustomersPage() {
 export function CustomerDetailPage({ customerId }: { customerId: string }) {
   const [customer, setCustomer] = useState<(Customer & { field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null }) | null>(null);
   const [loans, setLoans] = useState<Array<{ id: string; loan_number: string | null; principal_amount: number; interest_rate: number; term_months: number; status: string; disbursement_date: string; created_at: string }>>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [savings, setSavings] = useState<number>(0);
   const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [formData, setFormData] = useState<CustomerFormData>(emptyCustomerForm);
   const [submitting, setSubmitting] = useState(false);
+  const [txnModalOpen, setTxnModalOpen] = useState(false);
+  const [txnForm, setTxnForm] = useState({ type: 'deposit' as 'deposit' | 'withdrawal', amount: '', method: 'cash' as 'cash' | 'bank_transfer' | 'mobile_money' | 'cheque', description: '', transaction_date: new Date().toISOString().slice(0, 10) });
+  const [txnSubmitting, setTxnSubmitting] = useState(false);
+  const [txnError, setTxnError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [cRes, lRes, aRes] = await Promise.all([
+    const [cRes, lRes, aRes, txnRes, savRes] = await Promise.all([
       supabase.from('customers').select('*, field_agents(id, full_name, zone)').eq('id', customerId).maybeSingle(),
       supabase.from('loans').select('id, loan_number, principal_amount, interest_rate, term_months, status, disbursement_date, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
       supabase.from('field_agents').select('*').eq('status', 'active').order('full_name'),
+      supabase.from('transactions').select('*').eq('customer_id', customerId).order('transaction_date', { ascending: false }),
+      supabase.from('customer_savings').select('*').eq('customer_id', customerId).maybeSingle(),
     ]);
     setCustomer(cRes.data as (Customer & { field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null }) | null);
     setLoans(lRes.data ?? []);
     setFieldAgents(aRes.data ?? []);
+    setTransactions((txnRes.data as Transaction[]) ?? []);
+    setSavings(Number((savRes.data as { total_savings?: number } | null)?.total_savings ?? 0));
     setLoading(false);
   }, [customerId]);
 
@@ -293,6 +326,33 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
     await supabase.from('customers').update(payload).eq('id', customer.id);
     setSubmitting(false);
     setEditOpen(false);
+    load();
+  };
+
+  const handleAddTxn = async () => {
+    if (!customer) return;
+    setTxnError(null);
+    const amount = parseFloat(txnForm.amount);
+    if (isNaN(amount) || amount <= 0) {
+      setTxnError('Please enter a valid amount greater than zero.');
+      return;
+    }
+    setTxnSubmitting(true);
+    const { error } = await supabase.from('transactions').insert({
+      type: txnForm.type,
+      amount,
+      method: txnForm.method,
+      description: txnForm.description || null,
+      customer_id: customer.id,
+      transaction_date: txnForm.transaction_date,
+    });
+    setTxnSubmitting(false);
+    if (error) {
+      setTxnError('Could not save the transaction. Please try again.');
+      return;
+    }
+    setTxnModalOpen(false);
+    setTxnForm({ type: 'deposit', amount: '', method: 'cash', description: '', transaction_date: new Date().toISOString().slice(0, 10) });
     load();
   };
 
@@ -332,6 +392,7 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
             <div>
               <h2 className="text-xl font-bold text-slate-800">{customer.full_name}</h2>
               <div className="flex items-center gap-2 mt-1">
+                {customer.customer_number && <span className="text-xs font-mono text-primary-600 bg-primary-50 px-2 py-0.5 rounded">{customer.customer_number}</span>}
                 <Badge color={statusColors[customer.status]}>{customer.status}</Badge>
                 <span className="text-sm text-slate-500">Added {formatDateTime(customer.created_at)}</span>
               </div>
@@ -353,12 +414,67 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
           <InfoItem label="Total Borrowed" value={formatCurrency(totalBorrowed)} />
           <InfoItem label="Active Loans" value={loans.filter((l) => l.status === 'active').length.toString()} />
           <InfoItem icon={<UserCog size={16} />} label="Field Agent" value={customer.field_agents?.full_name ?? 'Unassigned'} />
+          <InfoItem icon={<PiggyBank size={16} />} label="Total Savings" value={formatCurrency(savings)} />
         </div>
 
         {customer.notes && (
           <div className="mt-4 pt-4 border-t border-slate-200">
             <p className="text-sm text-slate-500 mb-1">Notes</p>
             <p className="text-sm text-slate-700">{customer.notes}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Savings & Transactions */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-50 text-accent-600">
+              <PiggyBank size={18} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-slate-800">Savings & Transactions</h3>
+              <p className="text-sm text-accent-600 font-semibold">Total saved: {formatCurrency(savings)}</p>
+            </div>
+          </div>
+          <Button size="sm" onClick={() => setTxnModalOpen(true)}>
+            <Plus size={16} />
+            Add Transaction
+          </Button>
+        </div>
+        {transactions.length === 0 ? (
+          <EmptyState icon={<PiggyBank size={24} />} title="No transactions yet" description="Record a deposit or withdrawal for this customer." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="table-header">Date</th>
+                  <th className="table-header">Type</th>
+                  <th className="table-header">Description</th>
+                  <th className="table-header">Amount</th>
+                  <th className="table-header">Method</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {transactions.map((t) => (
+                  <tr key={t.id} className="hover:bg-slate-50 transition">
+                    <td className="table-cell text-slate-500">{formatDate(t.transaction_date)}</td>
+                    <td className="table-cell">
+                      <Badge color={t.type === 'deposit' ? 'green' : 'red'}>
+                        {t.type === 'deposit' ? <ArrowDownLeft size={12} className="inline mr-1" /> : <ArrowUpRight size={12} className="inline mr-1" />}
+                        {t.type}
+                      </Badge>
+                    </td>
+                    <td className="table-cell text-slate-600">{t.description ?? '—'}</td>
+                    <td className={`table-cell font-semibold ${t.type === 'deposit' ? 'text-accent-600' : 'text-error-600'}`}>
+                      {t.type === 'deposit' ? '+' : '−'}{formatCurrency(Number(t.amount))}
+                    </td>
+                    <td className="table-cell"><Badge color="slate">{t.method.replace('_', ' ')}</Badge></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
@@ -426,6 +542,73 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
           mode="edit"
           fieldAgents={fieldAgents}
         />
+      </Modal>
+
+      <Modal open={txnModalOpen} onClose={() => { setTxnModalOpen(false); setTxnError(null); }} title="Add Transaction" size="md">
+        <div className="space-y-4">
+          {txnError && (
+            <div className="rounded-lg bg-error-50 border border-error-200 px-4 py-2.5 text-sm text-error-700">
+              {txnError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setTxnForm({ ...txnForm, type: 'deposit' })}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition ${txnForm.type === 'deposit' ? 'border-accent-500 bg-accent-50 text-accent-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+            >
+              <ArrowDownLeft size={18} />
+              <span className="font-medium text-sm">Deposit</span>
+            </button>
+            <button
+              onClick={() => setTxnForm({ ...txnForm, type: 'withdrawal' })}
+              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition ${txnForm.type === 'withdrawal' ? 'border-error-500 bg-error-50 text-error-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+            >
+              <ArrowUpRight size={18} />
+              <span className="font-medium text-sm">Withdrawal</span>
+            </button>
+          </div>
+          <Input
+            label="Amount (GHS) *"
+            required
+            type="number"
+            step="0.01"
+            min="0"
+            value={txnForm.amount}
+            onChange={(e) => setTxnForm({ ...txnForm, amount: e.target.value })}
+            placeholder="0.00"
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Payment Method"
+              value={txnForm.method}
+              onChange={(e) => setTxnForm({ ...txnForm, method: e.target.value as 'cash' | 'bank_transfer' | 'mobile_money' | 'cheque' })}
+            >
+              <option value="cash">Cash</option>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="mobile_money">Mobile Money</option>
+              <option value="cheque">Cheque</option>
+            </Select>
+            <Input
+              label="Transaction Date *"
+              required
+              type="date"
+              value={txnForm.transaction_date}
+              onChange={(e) => setTxnForm({ ...txnForm, transaction_date: e.target.value })}
+            />
+          </div>
+          <Input
+            label="Description"
+            value={txnForm.description}
+            onChange={(e) => setTxnForm({ ...txnForm, description: e.target.value })}
+            placeholder="What is this transaction for?"
+          />
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setTxnModalOpen(false)}>Cancel</Button>
+            <Button onClick={handleAddTxn} disabled={txnSubmitting || !txnForm.amount}>
+              {txnSubmitting ? 'Saving...' : 'Save Transaction'}
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Users, Search, Phone, Mail, MapPin, UserPlus, Eye } from 'lucide-react';
+import { Users, Search, Phone, Mail, MapPin, UserPlus, Eye, PiggyBank } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useFieldAgentId } from '@/lib/useFieldAgentId';
 import type { Customer, CustomerStatus } from '@/lib/types';
@@ -17,7 +17,7 @@ const statusColors: Record<CustomerStatus, 'green' | 'slate' | 'red'> = {
 
 export function AgentCustomersPage() {
   const { fieldAgentId, loading: agentLoading } = useFieldAgentId();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customers, setCustomers] = useState<(Customer & { total_savings?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -25,12 +25,15 @@ export function AgentCustomersPage() {
   const load = useCallback(async () => {
     if (!fieldAgentId) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('customers')
-      .select('*')
-      .eq('field_agent_id', fieldAgentId)
-      .order('created_at', { ascending: false });
-    setCustomers(data ?? []);
+    const [custRes, savRes] = await Promise.all([
+      supabase.from('customers').select('*').eq('field_agent_id', fieldAgentId).order('created_at', { ascending: false }),
+      supabase.from('customer_savings').select('*'),
+    ]);
+    const savingsMap = new Map<string, number>();
+    for (const s of savRes.data ?? []) {
+      savingsMap.set((s as { customer_id: string; total_savings: number }).customer_id, Number((s as { total_savings: number }).total_savings));
+    }
+    setCustomers(((custRes.data as Customer[]) ?? []).map((c) => ({ ...c, total_savings: savingsMap.get(c.id) ?? 0 })));
     setLoading(false);
   }, [fieldAgentId]);
 
@@ -113,7 +116,12 @@ export function AgentCustomersPage() {
                     >
                       {c.full_name}
                     </button>
-                    <Badge color={statusColors[c.status]}>{c.status}</Badge>
+                    {c.customer_number && (
+                      <p className="text-xs font-mono text-primary-500">{c.customer_number}</p>
+                    )}
+                    <div className="mt-0.5">
+                      <Badge color={statusColors[c.status]}>{c.status}</Badge>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -122,6 +130,7 @@ export function AgentCustomersPage() {
                 <p className="flex items-center gap-2 text-slate-500"><Phone size={12} /> {c.phone}</p>
                 {c.email && <p className="flex items-center gap-2 text-slate-500"><Mail size={12} /> {c.email}</p>}
                 {c.address && <p className="flex items-center gap-2 text-slate-500"><MapPin size={12} /> {c.address}</p>}
+                <p className="flex items-center gap-2 text-slate-500"><PiggyBank size={12} /> Saved: <span className="font-semibold text-accent-600">{formatCurrency(Number(c.total_savings) || 0)}</span></p>
                 <p className="text-xs text-slate-400">Added {formatDateTime(c.created_at)}</p>
               </div>
 

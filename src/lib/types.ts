@@ -16,6 +16,7 @@ export interface Profile {
 
 export interface Customer {
   id: string;
+  customer_number: string | null;
   full_name: string;
   phone: string;
   email: string | null;
@@ -77,6 +78,18 @@ export interface RepaymentWithLoan extends Repayment {
   } | null;
 }
 
+export interface CustomerSavings {
+  customer_id: string;
+  total_savings: number;
+  susu_savings: number;
+  deposit_savings: number;
+  transaction_count: number;
+}
+
+export interface TransactionWithCustomer extends Transaction {
+  customers: Pick<Customer, 'id' | 'full_name' | 'customer_number'> | null;
+}
+
 export type TransactionType = 'deposit' | 'withdrawal';
 export type TransactionCategory = 'capital' | 'operational' | 'salary' | 'rent' | 'loan_funding' | 'other';
 
@@ -88,6 +101,7 @@ export interface Transaction {
   description: string | null;
   method: PaymentMethod;
   reference: string | null;
+  customer_id: string | null;
   transaction_date: string;
   created_by: string | null;
   created_at: string;

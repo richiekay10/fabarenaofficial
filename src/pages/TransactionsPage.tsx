@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, Plus, Search, Trash2, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import type { Transaction, TransactionType, PaymentMethod } from '@/lib/types';
+import type { Transaction, TransactionType, PaymentMethod, Customer } from '@/lib/types';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
 import { Input, Select, Textarea } from '@/components/ui/Input';
+import { navigate } from '@/lib/router';
 
 interface TxnFormData {
   type: TransactionType;
@@ -16,6 +17,7 @@ interface TxnFormData {
   description: string;
   method: PaymentMethod;
   reference: string;
+  customer_id: string;
   transaction_date: string;
 }
 
@@ -26,6 +28,7 @@ const emptyForm: TxnFormData = {
   description: '',
   method: 'cash',
   reference: '',
+  customer_id: '',
   transaction_date: new Date().toISOString().slice(0, 10),
 };
 
@@ -39,7 +42,8 @@ const categoryLabels: Record<string, string> = {
 };
 
 export function TransactionsPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<(Transaction & { customers: Pick<Customer, 'id' | 'full_name' | 'customer_number'> | null })[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -50,11 +54,12 @@ export function TransactionsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('transactions')
-      .select('*')
-      .order('transaction_date', { ascending: false });
-    setTransactions((data as Transaction[]) ?? []);
+    const [txnRes, custRes] = await Promise.all([
+      supabase.from('transactions').select('*, customers(id, full_name, customer_number)').order('transaction_date', { ascending: false }),
+      supabase.from('customers').select('*').order('full_name'),
+    ]);
+    setTransactions((txnRes.data as (Transaction & { customers: Pick<Customer, 'id' | 'full_name' | 'customer_number'> | null })[]) ?? []);
+    setCustomers((custRes.data as Customer[]) ?? []);
     setLoading(false);
   }, []);
 
@@ -68,7 +73,8 @@ export function TransactionsPage() {
         !search ||
         (t.description ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (t.reference ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (t.category ?? '').toLowerCase().includes(search.toLowerCase());
+        (t.category ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (t.customers?.full_name ?? '').toLowerCase().includes(search.toLowerCase());
       const matchesType = typeFilter === 'all' || t.type === typeFilter;
       return matchesSearch && matchesType;
     });
@@ -92,6 +98,7 @@ export function TransactionsPage() {
       description: formData.description || null,
       method: formData.method,
       reference: formData.reference || null,
+      customer_id: formData.customer_id || null,
       transaction_date: formData.transaction_date,
     });
     setSubmitting(false);
@@ -153,6 +160,7 @@ export function TransactionsPage() {
                 <tr>
                   <th className="table-header">Date</th>
                   <th className="table-header">Type</th>
+                  <th className="table-header">Customer</th>
                   <th className="table-header">Category</th>
                   <th className="table-header">Description</th>
                   <th className="table-header">Amount</th>
@@ -171,6 +179,15 @@ export function TransactionsPage() {
                         {t.type === 'deposit' ? <ArrowDownLeft size={12} className="inline mr-1" /> : <ArrowUpRight size={12} className="inline mr-1" />}
                         {t.type}
                       </Badge>
+                    </td>
+                    <td className="table-cell">
+                      {t.customers ? (
+                        <button onClick={() => navigate(`/customers/${t.customers!.id}`)} className="text-primary-600 hover:text-primary-700 font-medium">
+                          {t.customers.full_name}
+                        </button>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
                     </td>
                     <td className="table-cell text-slate-600">{t.category ? categoryLabels[t.category] ?? t.category : '—'}</td>
                     <td className="table-cell text-slate-600 max-w-xs truncate">{t.description ?? '—'}</td>
@@ -215,6 +232,19 @@ export function TransactionsPage() {
               <span className="font-medium text-sm">Withdrawal</span>
             </button>
           </div>
+
+          <Select
+            label="Link to Customer (optional)"
+            value={formData.customer_id}
+            onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
+          >
+            <option value="">No specific customer</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.customer_number ? `${c.customer_number} — ` : ''}{c.full_name}
+              </option>
+            ))}
+          </Select>
 
           <Input
             label="Amount (GHS) *"
