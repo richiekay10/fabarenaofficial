@@ -22,6 +22,7 @@ interface CustomerWithAgent extends Customer {
 
 export function CustomersPage() {
   const [customers, setCustomers] = useState<CustomerWithAgent[]>([]);
+  const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -33,8 +34,12 @@ export function CustomersPage() {
 
   const loadCustomers = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('customers').select('*, field_agents(id, full_name, zone)').order('created_at', { ascending: false });
-    setCustomers(data ?? []);
+    const [custRes, agentRes] = await Promise.all([
+      supabase.from('customers').select('*, field_agents(id, full_name, zone)').order('created_at', { ascending: false }),
+      supabase.from('field_agents').select('*').eq('status', 'active').order('full_name'),
+    ]);
+    setCustomers(custRes.data ?? []);
+    setFieldAgents(agentRes.data ?? []);
     setLoading(false);
   }, []);
 
@@ -77,6 +82,7 @@ export function CustomersPage() {
       occupation: formData.occupation || null,
       monthly_income: formData.monthly_income ? parseFloat(formData.monthly_income) : null,
       status: formData.status,
+      field_agent_id: formData.field_agent_id || null,
       notes: formData.notes || null,
     };
 
@@ -218,6 +224,7 @@ export function CustomersPage() {
           onCancel={() => setModalOpen(false)}
           submitting={submitting}
           mode={editTarget ? 'edit' : 'add'}
+          fieldAgents={fieldAgents}
         />
       </Modal>
 
@@ -236,8 +243,9 @@ export function CustomersPage() {
 }
 
 export function CustomerDetailPage({ customerId }: { customerId: string }) {
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomer] = useState<(Customer & { field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null }) | null>(null);
   const [loans, setLoans] = useState<Array<{ id: string; loan_number: string | null; principal_amount: number; interest_rate: number; term_months: number; status: string; disbursement_date: string; created_at: string }>>([]);
+  const [fieldAgents, setFieldAgents] = useState<FieldAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [formData, setFormData] = useState<CustomerFormData>(emptyCustomerForm);
@@ -245,12 +253,14 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [cRes, lRes] = await Promise.all([
-      supabase.from('customers').select('*').eq('id', customerId).maybeSingle(),
+    const [cRes, lRes, aRes] = await Promise.all([
+      supabase.from('customers').select('*, field_agents(id, full_name, zone)').eq('id', customerId).maybeSingle(),
       supabase.from('loans').select('id, loan_number, principal_amount, interest_rate, term_months, status, disbursement_date, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
+      supabase.from('field_agents').select('*').eq('status', 'active').order('full_name'),
     ]);
-    setCustomer(cRes.data as Customer | null);
+    setCustomer(cRes.data as (Customer & { field_agents: Pick<FieldAgent, 'id' | 'full_name' | 'zone'> | null }) | null);
     setLoans(lRes.data ?? []);
+    setFieldAgents(aRes.data ?? []);
     setLoading(false);
   }, [customerId]);
 
@@ -277,6 +287,7 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
       occupation: formData.occupation || null,
       monthly_income: formData.monthly_income ? parseFloat(formData.monthly_income) : null,
       status: formData.status,
+      field_agent_id: formData.field_agent_id || null,
       notes: formData.notes || null,
     };
     await supabase.from('customers').update(payload).eq('id', customer.id);
@@ -341,6 +352,7 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
           <InfoItem label="Monthly Income" value={customer.monthly_income ? formatCurrency(Number(customer.monthly_income)) : '—'} />
           <InfoItem label="Total Borrowed" value={formatCurrency(totalBorrowed)} />
           <InfoItem label="Active Loans" value={loans.filter((l) => l.status === 'active').length.toString()} />
+          <InfoItem icon={<UserCog size={16} />} label="Field Agent" value={customer.field_agents?.full_name ?? 'Unassigned'} />
         </div>
 
         {customer.notes && (
@@ -412,6 +424,7 @@ export function CustomerDetailPage({ customerId }: { customerId: string }) {
           onCancel={() => setEditOpen(false)}
           submitting={submitting}
           mode="edit"
+          fieldAgents={fieldAgents}
         />
       </Modal>
     </div>

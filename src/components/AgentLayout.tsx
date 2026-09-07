@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   UserPlus,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRoute, navigate, type Route } from '@/lib/router';
@@ -24,6 +25,7 @@ const navItems: NavItem[] = [
   { label: 'My Dashboard', icon: LayoutDashboard, route: { name: 'agent-dashboard' }, path: '/agent-dashboard', match: ['agent-dashboard'] },
   { label: 'My Collections', icon: PiggyBank, route: { name: 'agent-collections' }, path: '/agent-collections', match: ['agent-collections'] },
   { label: 'My Accounts', icon: ClipboardList, route: { name: 'agent-accounts' }, path: '/agent-accounts', match: ['agent-accounts'] },
+  { label: 'My Customers', icon: Users, route: { name: 'agent-customers' }, path: '/agent-customers', match: ['agent-customers'] },
   { label: 'Add Customer', icon: UserPlus, route: { name: 'agent-add-customer' }, path: '/agent-add-customer', match: ['agent-add-customer'] },
 ];
 

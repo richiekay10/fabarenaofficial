@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Search, Calendar, Phone, PiggyBank } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
+import { useFieldAgentId } from '@/lib/useFieldAgentId';
 import type { SusuAccountWithDetails } from '@/lib/types';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
@@ -9,22 +9,22 @@ import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
 import { navigate } from '@/lib/router';
 
 export function AgentAccountsPage() {
-  const { profile } = useAuth();
+  const { fieldAgentId, loading: agentLoading } = useFieldAgentId();
   const [accounts, setAccounts] = useState<(SusuAccountWithDetails & { _collected?: number; _collectionCount?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
-    if (!profile) return;
+    if (!fieldAgentId) return;
     setLoading(true);
     const [accRes, collRes] = await Promise.all([
       supabase.from('susu_accounts')
         .select('*, customers(id, full_name, phone), field_agents(id, full_name, zone)')
-        .eq('field_agent_id', profile.id)
+        .eq('field_agent_id', fieldAgentId)
         .order('created_at', { ascending: false }),
       supabase.from('susu_collections')
         .select('id, susu_account_id, amount, collection_date')
-        .eq('field_agent_id', profile.id),
+        .eq('field_agent_id', fieldAgentId),
     ]);
 
     const accs = (accRes.data as SusuAccountWithDetails[]) ?? [];
@@ -43,7 +43,7 @@ export function AgentAccountsPage() {
       _collectionCount: collByAccount[a.id]?.count ?? 0,
     })));
     setLoading(false);
-  }, [profile]);
+  }, [fieldAgentId]);
 
   useEffect(() => {
     load();
@@ -60,7 +60,7 @@ export function AgentAccountsPage() {
   const activeCount = accounts.filter((a) => a.status === 'active').length;
   const totalCollected = accounts.reduce((s, a) => s + (a._collected ?? 0), 0);
 
-  if (loading) {
+  if (agentLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size={32} />

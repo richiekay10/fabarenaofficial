@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PiggyBank, Plus, Search, Trash2, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/context/AuthContext';
+import { useFieldAgentId } from '@/lib/useFieldAgentId';
 import type { SusuCollectionWithDetails, SusuAccountWithDetails } from '@/lib/types';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/format';
 import { Badge } from '@/components/ui/Badge';
@@ -27,7 +27,7 @@ const emptyForm: CollectionFormData = {
 };
 
 export function AgentCollectionsPage() {
-  const { profile } = useAuth();
+  const { fieldAgentId, loading: agentLoading } = useFieldAgentId();
   const [collections, setCollections] = useState<SusuCollectionWithDetails[]>([]);
   const [accounts, setAccounts] = useState<SusuAccountWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,16 +40,16 @@ export function AgentCollectionsPage() {
   const [deleteTarget, setDeleteTarget] = useState<SusuCollectionWithDetails | null>(null);
 
   const load = useCallback(async () => {
-    if (!profile) return;
+    if (!fieldAgentId) return;
     setLoading(true);
     const [collRes, accRes] = await Promise.all([
       supabase.from('susu_collections')
         .select('*, susu_accounts(id, account_number), customers(id, full_name), field_agents(id, full_name)')
-        .eq('field_agent_id', profile.id)
+        .eq('field_agent_id', fieldAgentId)
         .order('collection_date', { ascending: false }),
       supabase.from('susu_accounts')
         .select('*, customers(id, full_name, phone), field_agents(id, full_name, zone)')
-        .eq('field_agent_id', profile.id)
+        .eq('field_agent_id', fieldAgentId)
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
     ]);
@@ -57,7 +57,7 @@ export function AgentCollectionsPage() {
     setCollections((collRes.data as SusuCollectionWithDetails[]) ?? []);
     setAccounts((accRes.data as SusuAccountWithDetails[]) ?? []);
     setLoading(false);
-  }, [profile]);
+  }, [fieldAgentId]);
 
   useEffect(() => {
     load();
@@ -87,7 +87,7 @@ export function AgentCollectionsPage() {
 
   const handleSubmit = async () => {
     setFormError(null);
-    if (!profile) return;
+    if (!fieldAgentId) return;
     const account = accounts.find((a) => a.id === formData.susu_account_id);
     if (!account) {
       setFormError('Please select a susu account.');
@@ -106,7 +106,7 @@ export function AgentCollectionsPage() {
     setSubmitting(true);
     const { error } = await supabase.from('susu_collections').insert({
       susu_account_id: formData.susu_account_id,
-      field_agent_id: profile.id,
+      field_agent_id: fieldAgentId,
       customer_id: account.customer_id,
       amount,
       collection_date: formData.collection_date,
@@ -133,6 +133,14 @@ export function AgentCollectionsPage() {
     setDeleteTarget(null);
     load();
   };
+
+  if (agentLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">

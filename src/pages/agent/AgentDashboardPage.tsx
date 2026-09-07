@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { PiggyBank, TrendingUp, ClipboardList, Calendar, ArrowUpRight } from 'lucide-react';
+import { PiggyBank, TrendingUp, ClipboardList, Calendar, ArrowUpRight, UserPlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
+import { useFieldAgentId } from '@/lib/useFieldAgentId';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { StatCard, Spinner, EmptyState } from '@/components/ui/StatCard';
 import { navigate } from '@/lib/router';
@@ -18,21 +19,22 @@ interface AgentData {
 
 export function AgentDashboardPage() {
   const { profile } = useAuth();
+  const { fieldAgentId, loading: agentLoading } = useFieldAgentId();
   const [data, setData] = useState<AgentData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!profile) return;
+    if (!fieldAgentId) return;
     setLoading(true);
     try {
       const [collectionsRes, accountsRes] = await Promise.all([
         supabase.from('susu_collections')
           .select('id, amount, collection_date, customers(full_name), susu_accounts(account_number)')
-          .eq('field_agent_id', profile.id)
+          .eq('field_agent_id', fieldAgentId)
           .order('collection_date', { ascending: false }),
         supabase.from('susu_accounts')
           .select('id, status, daily_amount, customers(full_name)')
-          .eq('field_agent_id', profile.id),
+          .eq('field_agent_id', fieldAgentId),
       ]);
 
       const collections = collectionsRes.data ?? [];
@@ -63,13 +65,13 @@ export function AgentDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [profile]);
+  }, [fieldAgentId]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  if (loading) {
+  if (agentLoading || loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <Spinner size={32} />
@@ -95,6 +97,13 @@ export function AgentDashboardPage() {
         >
           <PiggyBank size={16} />
           Record a Collection
+        </button>
+        <button
+          onClick={() => navigate('/agent-add-customer')}
+          className="mt-4 ml-2 inline-flex items-center gap-2 rounded-lg bg-white/15 hover:bg-white/25 px-4 py-2 text-sm font-medium transition"
+        >
+          <UserPlus size={16} />
+          Add Customer
         </button>
       </div>
 

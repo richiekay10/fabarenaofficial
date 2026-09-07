@@ -1,7 +1,7 @@
 import { type FormEvent } from 'react';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import type { Customer, CustomerStatus } from '@/lib/types';
+import type { Customer, CustomerStatus, FieldAgent } from '@/lib/types';
 
 export interface CustomerFormData {
   full_name: string;
@@ -12,6 +12,7 @@ export interface CustomerFormData {
   occupation: string;
   monthly_income: string;
   status: CustomerStatus;
+  field_agent_id: string;
   notes: string;
 }
 
@@ -24,6 +25,7 @@ export const emptyCustomerForm: CustomerFormData = {
   occupation: '',
   monthly_income: '',
   status: 'active',
+  field_agent_id: '',
   notes: '',
 };
 
@@ -37,6 +39,7 @@ export function customerToForm(c: Customer): CustomerFormData {
     occupation: c.occupation ?? '',
     monthly_income: c.monthly_income?.toString() ?? '',
     status: c.status,
+    field_agent_id: c.field_agent_id ?? '',
     notes: c.notes ?? '',
   };
 }
@@ -48,9 +51,10 @@ interface CustomerFormProps {
   onCancel: () => void;
   submitting: boolean;
   mode: 'add' | 'edit';
+  fieldAgents?: FieldAgent[];
 }
 
-export function CustomerForm({ data, onChange, onSubmit, onCancel, submitting, mode }: CustomerFormProps) {
+export function CustomerForm({ data, onChange, onSubmit, onCancel, submitting, mode, fieldAgents }: CustomerFormProps) {
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSubmit();
@@ -124,6 +128,21 @@ export function CustomerForm({ data, onChange, onSubmit, onCancel, submitting, m
         <option value="inactive">Inactive</option>
         <option value="blacklisted">Blacklisted</option>
       </Select>
+
+      {fieldAgents && fieldAgents.length > 0 && (
+        <Select
+          label="Assign to Field Agent"
+          value={data.field_agent_id}
+          onChange={(e) => onChange({ ...data, field_agent_id: e.target.value })}
+        >
+          <option value="">Unassigned</option>
+          {fieldAgents.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.full_name}{a.zone ? ` (${a.zone})` : ''}
+            </option>
+          ))}
+        </Select>
+      )}
 
       <Textarea
         label="Notes"
