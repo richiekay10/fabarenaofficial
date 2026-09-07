@@ -15,6 +15,8 @@ interface AgentData {
   totalAllTime: number;
   activeAccounts: number;
   recentCollections: any[];
+  totalCustomers: number;
+  totalSavings: number;
 }
 
 export function AgentDashboardPage() {
@@ -27,7 +29,7 @@ export function AgentDashboardPage() {
     if (!fieldAgentId) return;
     setLoading(true);
     try {
-      const [collectionsRes, accountsRes] = await Promise.all([
+      const [collectionsRes, accountsRes, customersRes, savingsRes] = await Promise.all([
         supabase.from('susu_collections')
           .select('id, amount, collection_date, customers(full_name), susu_accounts(account_number)')
           .eq('field_agent_id', fieldAgentId)
@@ -35,10 +37,16 @@ export function AgentDashboardPage() {
         supabase.from('susu_accounts')
           .select('id, status, daily_amount, customers(full_name)')
           .eq('field_agent_id', fieldAgentId),
+        supabase.from('customers').select('id').eq('field_agent_id', fieldAgentId),
+        supabase.from('customer_savings').select('*'),
       ]);
 
       const collections = collectionsRes.data ?? [];
       const accounts = accountsRes.data ?? [];
+      const agentCustomerIds = new Set((customersRes.data ?? []).map((c: any) => c.id));
+      const totalSavings = (savingsRes.data ?? [])
+        .filter((s: any) => agentCustomerIds.has(s.customer_id))
+        .reduce((sum: number, s: any) => sum + Number(s.total_savings), 0);
 
       const todayStr = new Date().toISOString().slice(0, 10);
       const now = new Date();
@@ -59,6 +67,8 @@ export function AgentDashboardPage() {
         totalAllTime: collections.reduce((s: number, c: any) => s + Number(c.amount), 0),
         activeAccounts: accounts.filter((a: any) => a.status === 'active').length,
         recentCollections: collections.slice(0, 8),
+        totalCustomers: agentCustomerIds.size,
+        totalSavings,
       });
     } catch {
       // ignore
@@ -115,17 +125,11 @@ export function AgentDashboardPage() {
         <StatCard label="Active Accounts" value={data.activeAccounts.toString()} icon={<ClipboardList size={24} />} color="blue" />
       </div>
 
-      {/* All-time summary */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-500">All-Time Total Collected</p>
-            <p className="text-3xl font-bold text-slate-800 mt-1">{formatCurrency(data.totalAllTime)}</p>
-          </div>
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
-            <PiggyBank size={28} />
-          </div>
-        </div>
+      {/* Second row: customer + savings */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard label="My Customers" value={data.totalCustomers.toString()} icon={<UserPlus size={24} />} color="blue" />
+        <StatCard label="Customer Savings" value={formatCurrency(data.totalSavings)} icon={<PiggyBank size={24} />} color="green" />
+        <StatCard label="All-Time Collected" value={formatCurrency(data.totalAllTime)} icon={<TrendingUp size={24} />} color="amber" />
       </div>
 
       {/* Recent collections */}

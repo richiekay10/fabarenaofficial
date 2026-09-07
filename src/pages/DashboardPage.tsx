@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Users, Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, PiggyBank, ArrowLeftRight, UserPlus, CreditCard, ArrowRight } from 'lucide-react';
+import { Users, Wallet, TrendingUp, AlertTriangle, ArrowUpRight, ArrowDownRight, PiggyBank, UserPlus, CreditCard, ArrowRight, ArrowDownLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, formatDate, formatDateTime, loanTotalPayable } from '@/lib/format';
 import { StatCard, Spinner, EmptyState } from '@/components/ui/StatCard';
@@ -18,10 +18,12 @@ interface DashboardData {
   monthlyData: { month: string; disbursed: number; collected: number }[];
   totalDeposits: number;
   totalWithdrawals: number;
+  netCash: number;
   susuTodayTotal: number;
   susuTodayCount: number;
   activeSusuAccounts: number;
   recentSusuCollections: any[];
+  totalPayable: number;
 }
 
 export function DashboardPage() {
@@ -92,6 +94,7 @@ export function DashboardPage() {
 
       const totalDeposits = transactions.filter((t: any) => t.type === 'deposit').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const totalWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal').reduce((s: number, t: any) => s + Number(t.amount), 0);
+      const netCash = totalDeposits - totalWithdrawals;
       const todayStr = new Date().toISOString().slice(0, 10);
       const susuToday = susuCollections.filter((c: any) => c.collection_date === todayStr);
       const susuTodayTotal = susuToday.reduce((s: number, c: any) => s + Number(c.amount), 0);
@@ -108,10 +111,12 @@ export function DashboardPage() {
         monthlyData,
         totalDeposits,
         totalWithdrawals,
+        netCash,
         susuTodayTotal,
         susuTodayCount: susuToday.length,
         activeSusuAccounts: susuAccounts.filter((a: any) => a.status === 'active').length,
         recentSusuCollections: susuCollections.slice(0, 5),
+        totalPayable: activeLoans.reduce((sum, l) => sum + loanTotalPayable(Number(l.principal_amount), Number(l.interest_rate), l.term_months), 0),
       });
     } catch {
       // ignore
@@ -201,20 +206,20 @@ export function DashboardPage() {
         <StatCard
           label="Total Deposits"
           value={formatCurrency(data.totalDeposits)}
-          icon={<ArrowLeftRight size={24} />}
+          icon={<ArrowDownLeft size={24} />}
           color="green"
         />
         <StatCard
           label="Total Withdrawals"
           value={formatCurrency(data.totalWithdrawals)}
-          icon={<ArrowLeftRight size={24} />}
+          icon={<ArrowUpRight size={24} />}
           color="red"
         />
         <StatCard
-          label="Susu Collected Today"
-          value={formatCurrency(data.susuTodayTotal)}
-          icon={<PiggyBank size={24} />}
-          color="blue"
+          label="Net Cash Position"
+          value={formatCurrency(data.netCash)}
+          icon={<Wallet size={24} />}
+          color={data.netCash >= 0 ? 'blue' : 'red'}
         />
         <StatCard
           label="Active Susu Accounts"
@@ -275,13 +280,15 @@ export function DashboardPage() {
             <SummaryRow label="Total Collected" value={formatCurrency(data.totalRepayments)} color="text-accent-600" />
             <SummaryRow label="Outstanding" value={formatCurrency(data.outstandingAmount)} color="text-warning-600" />
             <SummaryRow label="Overdue Loans" value={data.overdueLoans.toString()} color="text-error-600" />
+            <SummaryRow label="Net Cash Position" value={formatCurrency(data.netCash)} color={data.netCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
+            <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
           </div>
           <div className="mt-6 pt-4 border-t border-slate-200">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-500">Collection Rate</span>
               <span className="text-lg font-bold text-slate-800">
-                {data.totalDisbursed > 0
-                  ? `${((data.totalRepayments / data.totalDisbursed) * 100).toFixed(1)}%`
+                {data.totalPayable > 0
+                  ? `${((data.totalRepayments / data.totalPayable) * 100).toFixed(1)}%`
                   : '—'}
               </span>
             </div>
