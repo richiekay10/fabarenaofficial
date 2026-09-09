@@ -24,6 +24,8 @@ interface DashboardData {
   activeSusuAccounts: number;
   recentSusuCollections: any[];
   totalPayable: number;
+  agentBreakdown: { agentId: string; agentName: string; todayTotal: number; todayCount: number }[];
+  grandTotalToday: number;
 }
 
 export function DashboardPage() {
@@ -33,13 +35,16 @@ export function DashboardPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [customersRes, loansRes, repaymentsRes, txnRes, susuRes, susuAccRes] = await Promise.all([
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const [customersRes, loansRes, repaymentsRes, txnRes, susuRes, susuAccRes, agentsRes, todayCollectionsRes] = await Promise.all([
         supabase.from('customers').select('id, status'),
         supabase.from('loans').select('id, customer_id, loan_number, principal_amount, interest_rate, term_months, disbursement_date, status, created_at, customers(full_name)'),
         supabase.from('repayments').select('id, loan_id, amount, payment_date, method, created_at, loans(loan_number, customer_id, customers(full_name))'),
         supabase.from('transactions').select('id, type, amount, transaction_date'),
         supabase.from('susu_collections').select('id, amount, collection_date, customers(full_name), field_agents(full_name)').order('collection_date', { ascending: false }).limit(5),
         supabase.from('susu_accounts').select('id, status'),
+        supabase.from('field_agents').select('id, full_name').eq('status', 'active'),
+        supabase.from('susu_collections').select('id, amount, field_agent_id, field_agents(full_name)').eq('collection_date', todayStr),
       ]);
 
       const customers = customersRes.data ?? [];
@@ -48,6 +53,8 @@ export function DashboardPage() {
       const transactions = txnRes.data ?? [];
       const susuCollections = susuRes.data ?? [];
       const susuAccounts = susuAccRes.data ?? [];
+      const agents = agentsRes.data ?? [];
+      const todayCollections = todayCollectionsRes.data ?? [];
 
       const activeLoans = loans.filter((l) => l.status === 'active' || l.status === 'overdue');
       const overdueLoans = loans.filter((l) => l.status === 'overdue');
@@ -95,9 +102,29 @@ export function DashboardPage() {
       const totalDeposits = transactions.filter((t: any) => t.type === 'deposit').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const totalWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const netCash = totalDeposits - totalWithdrawals;
-      const todayStr = new Date().toISOString().slice(0, 10);
       const susuToday = susuCollections.filter((c: any) => c.collection_date === todayStr);
       const susuTodayTotal = susuToday.reduce((s: number, c: any) => s + Number(c.amount), 0);
+
+      // Per-agent breakdown for today
+      const agentMap = new Map<string, { agentName: string; todayTotal: number; todayCount: number }>();
+      for (const c of todayCollections) {
+        const aid = c.field_agent_id as string;
+        const name = (c.field_agents as any)?.full_name ?? 'Unassigned';
+        if (!agentMap.has(aid)) agentMap.set(aid, { agentName: name, todayTotal: 0, todayCount: 0 });
+        const entry = agentMap.get(aid)!;
+        entry.todayTotal += Number(c.amount);
+        entry.todayCount += 1;
+      }
+      // Include agents with zero collections today
+      for (const a of agents) {
+        if (!agentMap.has(a.id)) {
+          agentMap.set(a.id, { agentName: a.full_name, todayTotal: 0, todayCount: 0 });
+        }
+      }
+      const agentBreakdown = Array.from(agentMap.entries())
+        .map(([agentId, val]) => ({ agentId, agentName: val.agentName, todayTotal: val.todayTotal, todayCount: val.todayCount }))
+        .sort((a, b) => b.todayTotal - a.todayTotal);
+      const grandTotalToday = agentBreakdown.reduce((s, a) => s + a.todayTotal, 0);
 
       setData({
         totalCustomers: customers.length,
@@ -117,6 +144,8 @@ export function DashboardPage() {
         activeSusuAccounts: susuAccounts.filter((a: any) => a.status === 'active').length,
         recentSusuCollections: susuCollections.slice(0, 5),
         totalPayable: activeLoans.reduce((sum, l) => sum + loanTotalPayable(Number(l.principal_amount), Number(l.interest_rate), l.term_months), 0),
+        agentBreakdown,
+        grandTotalToday,
       });
     } catch {
       // ignore
@@ -127,6 +156,9 @@ export function DashboardPage() {
 
   useEffect(() => {
     loadData();
+    // Auto-refresh every 30 seconds for live agent collection updates
+    const interval = setInterval(loadData, 30_000);
+    return () => clearInterval(interval);
   }, [loadData]);
 
   if (loading) {
@@ -294,6 +326,73 @@ export function DashboardPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Field Agent Daily Collections */}
+      <div className="card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-800">Field Agent Collections Today</h3>
+            <p className="text-sm text-slate-500">Live breakdown by agent · auto-refreshes every 30s</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-500">Grand Total Today</p>
+            <p className="text-2xl font-bold text-accent-600">{formatCurrency(data.grandTotalToday)}</p>
+          </div>
+        </div>
+        {data.agentBreakdown.length === 0 ? (
+          <EmptyState icon={<PiggyBank size={24} />} title="No active field agents" description="Add field agents to see their daily collections here." />
+        ) : (
+          <div className="overflow-x-auto -mx-2">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-slate-500 border-b border-slate-200">
+                  <th className="pb-2 px-2 font-medium">Field Agent</th>
+                  <th className="pb-2 px-2 font-medium text-right">Collections Today</th>
+                  <th className="pb-2 px-2 font-medium text-right">Count</th>
+                  <th className="pb-2 px-2 font-medium text-right">% of Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.agentBreakdown.map((a) => (
+                  <tr key={a.agentId} className="border-b border-slate-50 hover:bg-slate-50 transition">
+                    <td className="py-3 px-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600 text-xs font-semibold">
+                          {a.agentName.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-slate-800">{a.agentName}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-2 text-right font-semibold text-slate-800">{formatCurrency(a.todayTotal)}</td>
+                    <td className="py-3 px-2 text-right text-slate-600">{a.todayCount}</td>
+                    <td className="py-3 px-2 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="w-20 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-accent-500 transition-all"
+                            style={{ width: `${data.grandTotalToday > 0 ? (a.todayTotal / data.grandTotalToday) * 100 : 0}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-500 w-10 text-right">
+                          {data.grandTotalToday > 0 ? ((a.todayTotal / data.grandTotalToday) * 100).toFixed(0) : '0'}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="font-semibold text-slate-800">
+                  <td className="pt-3 px-2">Total</td>
+                  <td className="pt-3 px-2 text-right text-accent-600">{formatCurrency(data.grandTotalToday)}</td>
+                  <td className="pt-3 px-2 text-right">{data.agentBreakdown.reduce((s, a) => s + a.todayCount, 0)}</td>
+                  <td className="pt-3 px-2 text-right text-slate-500">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Recent activity */}

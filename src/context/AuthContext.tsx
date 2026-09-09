@@ -3,6 +3,9 @@ import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { Profile, UserRole } from '@/lib/types';
 
+const INACTIVITY_LIMIT_MS = 6 * 60 * 60 * 1000;
+const LAST_ACTIVE_KEY = 'last_active_at';
+
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
@@ -71,6 +74,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Auto-logout after 6 hours of inactivity
+  useEffect(() => {
+    if (!session) return;
+
+    const activityEvents = ['mousedown', 'keydown', 'touchstart', 'scroll'];
+
+    const updateLastActive = () => {
+      localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+    };
+
+    const checkInactivity = () => {
+      const last = Number(localStorage.getItem(LAST_ACTIVE_KEY) ?? Date.now());
+      if (Date.now() - last > INACTIVITY_LIMIT_MS) {
+        signOut();
+      }
+    };
+
+    // Check on mount and every minute
+    checkInactivity();
+    const interval = setInterval(checkInactivity, 60_000);
+
+    // Track user activity
+    activityEvents.forEach((evt) => window.addEventListener(evt, updateLastActive, { passive: true }));
+    updateLastActive();
+
+    return () => {
+      clearInterval(interval);
+      activityEvents.forEach((evt) => window.removeEventListener(evt, updateLastActive));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   const signIn = async (email: string, password: string) => {
     try {
