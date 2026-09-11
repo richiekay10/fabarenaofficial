@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { BarChart3, TrendingUp, Users, Wallet, AlertTriangle, PieChart } from 'lucide-react';
+import { BarChart3, TrendingUp, Users, Wallet, AlertTriangle, PieChart, PiggyBank } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, loanTotalPayable } from '@/lib/format';
 import { Spinner, StatCard, EmptyState } from '@/components/ui/StatCard';
@@ -19,6 +19,11 @@ interface ReportData {
   statusBreakdown: { status: string; count: number; amount: number }[];
   topBorrowers: { name: string; total: number; count: number }[];
   monthlyTrend: { month: string; disbursed: number; collected: number }[];
+  susuTotal: number;
+  susuCount: number;
+  susuThisMonth: number;
+  topSusuAgents: { name: string; total: number; count: number }[];
+  susuMonthlyTrend: { month: string; amount: number }[];
 }
 
 export function ReportsPage() {
@@ -28,15 +33,19 @@ export function ReportsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [customersRes, loansRes, repaymentsRes] = await Promise.all([
+      const [customersRes, loansRes, repaymentsRes, susuRes, agentsRes] = await Promise.all([
         supabase.from('customers').select('id, status'),
         supabase.from('loans').select('id, customer_id, loan_number, principal_amount, interest_rate, term_months, disbursement_date, status, customers(full_name)'),
         supabase.from('repayments').select('id, loan_id, amount, payment_date'),
+        supabase.from('susu_collections').select('id, amount, collection_date, field_agent_id, field_agents(full_name)'),
+        supabase.from('field_agents').select('id, full_name').eq('status', 'active'),
       ]);
 
       const customers = customersRes.data ?? [];
       const loans = loansRes.data ?? [];
       const repayments = repaymentsRes.data ?? [];
+      const susuCollections = susuRes.data ?? [];
+      const agents = agentsRes.data ?? [];
 
       const totalDisbursed = loans.reduce((s, l) => s + Number(l.principal_amount), 0);
       const totalCollected = repayments.reduce((s, r) => s + Number(r.amount), 0);
@@ -88,6 +97,41 @@ export function ReportsPage() {
         monthlyTrend.push({ month: monthLabel, disbursed, collected });
       }
 
+      // Susu collection analytics
+      const susuTotal = susuCollections.reduce((s: number, c: any) => s + Number(c.amount), 0);
+      const susuCount = susuCollections.length;
+      const nowMonth = new Date();
+      const monthStart = new Date(nowMonth.getFullYear(), nowMonth.getMonth(), 1);
+      const susuThisMonth = susuCollections
+        .filter((c: any) => new Date(c.collection_date) >= monthStart)
+        .reduce((s: number, c: any) => s + Number(c.amount), 0);
+
+      // Top susu agents
+      const agentMap: Record<string, { name: string; total: number; count: number }> = {};
+      susuCollections.forEach((c: any) => {
+        const aid = c.field_agent_id as string;
+        const name = c.field_agents?.full_name ?? 'Unassigned';
+        if (!agentMap[aid]) agentMap[aid] = { name, total: 0, count: 0 };
+        agentMap[aid].total += Number(c.amount);
+        agentMap[aid].count += 1;
+      });
+      for (const a of agents) {
+        if (!agentMap[a.id]) agentMap[a.id] = { name: a.full_name, total: 0, count: 0 };
+      }
+      const topSusuAgents = Object.values(agentMap).sort((a, b) => b.total - a.total);
+
+      // Susu monthly trend (last 12 months)
+      const susuMonthlyTrend: { month: string; amount: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(nowMonth.getFullYear(), nowMonth.getMonth() - i, 1);
+        const monthEnd = new Date(nowMonth.getFullYear(), nowMonth.getMonth() - i + 1, 0);
+        const monthLabel = d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+        const amount = susuCollections
+          .filter((c: any) => { const cd = new Date(c.collection_date); return cd >= d && cd <= monthEnd; })
+          .reduce((s: number, c: any) => s + Number(c.amount), 0);
+        susuMonthlyTrend.push({ month: monthLabel, amount });
+      }
+
       setData({
         totalDisbursed,
         totalCollected,
@@ -102,6 +146,11 @@ export function ReportsPage() {
         statusBreakdown,
         topBorrowers,
         monthlyTrend,
+        susuTotal,
+        susuCount,
+        susuThisMonth,
+        topSusuAgents,
+        susuMonthlyTrend,
       });
     } catch {
       // ignore
@@ -266,6 +315,66 @@ export function ReportsPage() {
               {data.totalDisbursed > 0 ? `${((data.totalCollected / data.totalDisbursed) * 100).toFixed(1)}%` : '—'}
             </Badge>
           </div>
+        </div>
+      </div>
+
+      {/* Susu Collections Report */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <StatCard label="Total Susu Collected" value={formatCurrency(data.susuTotal)} icon={<PiggyBank size={24} />} color="green" />
+        <StatCard label="Susu Collections Count" value={data.susuCount.toString()} icon={<BarChart3 size={24} />} color="blue" />
+        <StatCard label="Susu This Month" value={formatCurrency(data.susuThisMonth)} icon={<TrendingUp size={24} />} color="amber" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Susu monthly trend */}
+        <div className="card p-6">
+          <h3 className="text-base font-semibold text-slate-800 mb-1">Susu Collection Trend</h3>
+          <p className="text-sm text-slate-500 mb-6">Monthly susu collections over the last 12 months</p>
+          <div className="flex items-end justify-between gap-1.5 h-48">
+            {data.susuMonthlyTrend.map((m, i) => {
+              const maxSusu = Math.max(...data.susuMonthlyTrend.map((s) => s.amount), 1);
+              return (
+                <div key={i} className="flex-1 flex flex-col items-center gap-1.5 group">
+                  <div className="w-full flex items-end justify-center gap-0.5 h-40">
+                    <div
+                      className="w-full max-w-[20px] bg-accent-500 rounded-t transition-all hover:bg-accent-600 relative"
+                      style={{ height: `${(m.amount / maxSusu) * 100}%` }}
+                    >
+                      <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] text-slate-500 opacity-0 group-hover:opacity-100 whitespace-nowrap">
+                        {formatCurrency(m.amount)}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-500 whitespace-nowrap">{m.month}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Top susu agents */}
+        <div className="card p-6">
+          <h3 className="text-base font-semibold text-slate-800 mb-4">Field Agent Susu Performance</h3>
+          {data.topSusuAgents.length === 0 ? (
+            <EmptyState icon={<PiggyBank size={24} />} title="No susu collections yet" description="Field agent susu performance will appear here." />
+          ) : (
+            <div className="space-y-3">
+              {data.topSusuAgents.map((a, i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-100 text-accent-700 text-xs font-bold">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">{a.name}</p>
+                      <p className="text-xs text-slate-500">{a.count} collection(s)</p>
+                    </div>
+                  </div>
+                  <span className="text-sm font-bold text-accent-600">{formatCurrency(a.total)}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

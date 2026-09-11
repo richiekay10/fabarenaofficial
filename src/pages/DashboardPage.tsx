@@ -111,10 +111,10 @@ export function DashboardPage() {
       const totalDeposits = transactions.filter((t: any) => t.type === 'deposit').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const totalWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const susuAllTimeTotal = allSusuCollections.reduce((s: number, c: any) => s + Number(c.amount), 0);
-      const netCash = totalDeposits + susuAllTimeTotal - totalWithdrawals;
+      const netCash = totalDeposits - totalWithdrawals;
       const todayDeposits = transactions.filter((t: any) => t.type === 'deposit' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const todayWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const todayNetCash = todayDeposits + susuTodayTotal - todayWithdrawals;
+      const todayNetCash = todayDeposits - todayWithdrawals;
 
       // Per-agent breakdown for today
       const agentMap = new Map<string, { agentName: string; todayTotal: number; todayCount: number }>();
@@ -333,9 +333,16 @@ export function DashboardPage() {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">All-Time Cash Flow</p>
             <div className="space-y-3">
               <SummaryRow label="Total Deposits" value={formatCurrency(data.totalDeposits)} color="text-success-600" />
-              <SummaryRow label="Total Susu Collections" value={formatCurrency(data.susuAllTimeTotal)} color="text-accent-600" />
               <SummaryRow label="Total Withdrawals" value={formatCurrency(data.totalWithdrawals)} color="text-error-600" />
               <SummaryRow label="Net Cash Position" value={formatCurrency(data.netCash)} color={data.netCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Field Agent Susu Collections</p>
+              <div className="space-y-3">
+                <SummaryRow label="All-Time Susu Collected" value={formatCurrency(data.susuAllTimeTotal)} color="text-accent-600" />
+                <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
+              </div>
             </div>
           </div>
 
@@ -343,7 +350,6 @@ export function DashboardPage() {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Today's Activity</p>
             <div className="space-y-3">
               <SummaryRow label="Today's Deposits" value={formatCurrency(data.todayDeposits)} color="text-success-600" />
-              <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
               <SummaryRow label="Today's Withdrawals" value={formatCurrency(data.todayWithdrawals)} color="text-error-600" />
               <SummaryRow label="Today's Net Cash" value={formatCurrency(data.todayNetCash)} color={data.todayNetCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
             </div>
