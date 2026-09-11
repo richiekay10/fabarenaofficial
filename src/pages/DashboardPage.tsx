@@ -19,6 +19,9 @@ interface DashboardData {
   totalDeposits: number;
   totalWithdrawals: number;
   netCash: number;
+  todayDeposits: number;
+  todayWithdrawals: number;
+  todayNetCash: number;
   susuTodayTotal: number;
   susuTodayCount: number;
   activeSusuAccounts: number;
@@ -102,6 +105,9 @@ export function DashboardPage() {
       const totalDeposits = transactions.filter((t: any) => t.type === 'deposit').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const totalWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const netCash = totalDeposits - totalWithdrawals;
+      const todayDeposits = transactions.filter((t: any) => t.type === 'deposit' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
+      const todayWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
+      const todayNetCash = todayDeposits - todayWithdrawals;
       const susuToday = susuCollections.filter((c: any) => c.collection_date === todayStr);
       const susuTodayTotal = susuToday.reduce((s: number, c: any) => s + Number(c.amount), 0);
 
@@ -139,6 +145,9 @@ export function DashboardPage() {
         totalDeposits,
         totalWithdrawals,
         netCash,
+        todayDeposits,
+        todayWithdrawals,
+        todayNetCash,
         susuTodayTotal,
         susuTodayCount: susuToday.length,
         activeSusuAccounts: susuAccounts.filter((a: any) => a.status === 'active').length,
@@ -312,9 +321,27 @@ export function DashboardPage() {
             <SummaryRow label="Total Collected" value={formatCurrency(data.totalRepayments)} color="text-accent-600" />
             <SummaryRow label="Outstanding" value={formatCurrency(data.outstandingAmount)} color="text-warning-600" />
             <SummaryRow label="Overdue Loans" value={data.overdueLoans.toString()} color="text-error-600" />
-            <SummaryRow label="Net Cash Position" value={formatCurrency(data.netCash)} color={data.netCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
-            <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
           </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">All-Time Cash Flow</p>
+            <div className="space-y-3">
+              <SummaryRow label="Total Deposits" value={formatCurrency(data.totalDeposits)} color="text-success-600" />
+              <SummaryRow label="Total Withdrawals" value={formatCurrency(data.totalWithdrawals)} color="text-error-600" />
+              <SummaryRow label="Net Cash Position" value={formatCurrency(data.netCash)} color={data.netCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
+            </div>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-slate-200">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Today's Activity</p>
+            <div className="space-y-3">
+              <SummaryRow label="Today's Deposits" value={formatCurrency(data.todayDeposits)} color="text-success-600" />
+              <SummaryRow label="Today's Withdrawals" value={formatCurrency(data.todayWithdrawals)} color="text-error-600" />
+              <SummaryRow label="Today's Net Cash" value={formatCurrency(data.todayNetCash)} color={data.todayNetCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
+              <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
+            </div>
+          </div>
+
           <div className="mt-6 pt-4 border-t border-slate-200">
             <div className="flex items-center justify-between">
               <span className="text-sm text-slate-500">Collection Rate</span>
