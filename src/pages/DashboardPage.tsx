@@ -23,6 +23,7 @@ interface DashboardData {
   todayWithdrawals: number;
   todayNetCash: number;
   susuTodayTotal: number;
+  susuAllTimeTotal: number;
   susuTodayCount: number;
   activeSusuAccounts: number;
   recentSusuCollections: any[];
@@ -39,7 +40,7 @@ export function DashboardPage() {
     setLoading(true);
     try {
       const todayStr = new Date().toISOString().slice(0, 10);
-      const [customersRes, loansRes, repaymentsRes, txnRes, susuRes, susuAccRes, agentsRes, todayCollectionsRes] = await Promise.all([
+      const [customersRes, loansRes, repaymentsRes, txnRes, susuRes, susuAccRes, agentsRes, todayCollectionsRes, allSusuRes] = await Promise.all([
         supabase.from('customers').select('id, status'),
         supabase.from('loans').select('id, customer_id, loan_number, principal_amount, interest_rate, term_months, disbursement_date, status, created_at, customers(full_name)'),
         supabase.from('repayments').select('id, loan_id, amount, payment_date, method, created_at, loans(loan_number, customer_id, customers(full_name))'),
@@ -48,6 +49,7 @@ export function DashboardPage() {
         supabase.from('susu_accounts').select('id, status'),
         supabase.from('field_agents').select('id, full_name').eq('status', 'active'),
         supabase.from('susu_collections').select('id, amount, field_agent_id, field_agents(full_name)').eq('collection_date', todayStr),
+        supabase.from('susu_collections').select('amount, collection_date'),
       ]);
 
       const customers = customersRes.data ?? [];
@@ -58,6 +60,10 @@ export function DashboardPage() {
       const susuAccounts = susuAccRes.data ?? [];
       const agents = agentsRes.data ?? [];
       const todayCollections = todayCollectionsRes.data ?? [];
+      const allSusuCollections = allSusuRes.data ?? [];
+
+      const susuToday = susuCollections.filter((c: any) => c.collection_date === todayStr);
+      const susuTodayTotal = susuToday.reduce((s: number, c: any) => s + Number(c.amount), 0);
 
       const activeLoans = loans.filter((l) => l.status === 'active' || l.status === 'overdue');
       const overdueLoans = loans.filter((l) => l.status === 'overdue');
@@ -104,12 +110,11 @@ export function DashboardPage() {
 
       const totalDeposits = transactions.filter((t: any) => t.type === 'deposit').reduce((s: number, t: any) => s + Number(t.amount), 0);
       const totalWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal').reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const netCash = totalDeposits - totalWithdrawals;
+      const susuAllTimeTotal = allSusuCollections.reduce((s: number, c: any) => s + Number(c.amount), 0);
+      const netCash = totalDeposits + susuAllTimeTotal - totalWithdrawals;
       const todayDeposits = transactions.filter((t: any) => t.type === 'deposit' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
       const todayWithdrawals = transactions.filter((t: any) => t.type === 'withdrawal' && t.transaction_date === todayStr).reduce((s: number, t: any) => s + Number(t.amount), 0);
-      const todayNetCash = todayDeposits - todayWithdrawals;
-      const susuToday = susuCollections.filter((c: any) => c.collection_date === todayStr);
-      const susuTodayTotal = susuToday.reduce((s: number, c: any) => s + Number(c.amount), 0);
+      const todayNetCash = todayDeposits + susuTodayTotal - todayWithdrawals;
 
       // Per-agent breakdown for today
       const agentMap = new Map<string, { agentName: string; todayTotal: number; todayCount: number }>();
@@ -149,6 +154,7 @@ export function DashboardPage() {
         todayWithdrawals,
         todayNetCash,
         susuTodayTotal,
+        susuAllTimeTotal,
         susuTodayCount: susuToday.length,
         activeSusuAccounts: susuAccounts.filter((a: any) => a.status === 'active').length,
         recentSusuCollections: susuCollections.slice(0, 5),
@@ -327,6 +333,7 @@ export function DashboardPage() {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">All-Time Cash Flow</p>
             <div className="space-y-3">
               <SummaryRow label="Total Deposits" value={formatCurrency(data.totalDeposits)} color="text-success-600" />
+              <SummaryRow label="Total Susu Collections" value={formatCurrency(data.susuAllTimeTotal)} color="text-accent-600" />
               <SummaryRow label="Total Withdrawals" value={formatCurrency(data.totalWithdrawals)} color="text-error-600" />
               <SummaryRow label="Net Cash Position" value={formatCurrency(data.netCash)} color={data.netCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
             </div>
@@ -336,9 +343,9 @@ export function DashboardPage() {
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Today's Activity</p>
             <div className="space-y-3">
               <SummaryRow label="Today's Deposits" value={formatCurrency(data.todayDeposits)} color="text-success-600" />
+              <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
               <SummaryRow label="Today's Withdrawals" value={formatCurrency(data.todayWithdrawals)} color="text-error-600" />
               <SummaryRow label="Today's Net Cash" value={formatCurrency(data.todayNetCash)} color={data.todayNetCash >= 0 ? 'text-primary-600' : 'text-error-600'} />
-              <SummaryRow label="Susu Collected Today" value={formatCurrency(data.susuTodayTotal)} color="text-accent-600" />
             </div>
           </div>
 
