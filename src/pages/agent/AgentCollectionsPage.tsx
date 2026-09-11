@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { PiggyBank, Plus, Search, Trash2, TrendingUp } from 'lucide-react';
+import { PiggyBank, Plus, Search, Trash2, TrendingUp, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useFieldAgentId } from '@/lib/useFieldAgentId';
 import type { SusuCollectionWithDetails, SusuAccountWithDetails } from '@/lib/types';
@@ -11,6 +11,7 @@ import { Spinner, EmptyState, StatCard } from '@/components/ui/StatCard';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 
 interface CollectionFormData {
+  field_agent_id: string;
   susu_account_id: string;
   amount: string;
   collection_date: string;
@@ -19,6 +20,7 @@ interface CollectionFormData {
 }
 
 const emptyForm: CollectionFormData = {
+  field_agent_id: '',
   susu_account_id: '',
   amount: '',
   collection_date: new Date().toISOString().slice(0, 10),
@@ -26,10 +28,16 @@ const emptyForm: CollectionFormData = {
   notes: '',
 };
 
+interface AgentOption {
+  id: string;
+  full_name: string;
+}
+
 export function AgentCollectionsPage() {
   const { fieldAgentId, loading: agentLoading } = useFieldAgentId();
   const [collections, setCollections] = useState<SusuCollectionWithDetails[]>([]);
   const [accounts, setAccounts] = useState<SusuAccountWithDetails[]>([]);
+  const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [dateFilter, setDateFilter] = useState('');
@@ -42,20 +50,21 @@ export function AgentCollectionsPage() {
   const load = useCallback(async () => {
     if (!fieldAgentId) return;
     setLoading(true);
-    const [collRes, accRes] = await Promise.all([
+    const [collRes, accRes, agentsRes] = await Promise.all([
       supabase.from('susu_collections')
         .select('*, susu_accounts(id, account_number), customers(id, full_name), field_agents(id, full_name)')
-        .eq('field_agent_id', fieldAgentId)
+        .or(`field_agent_id.eq.${fieldAgentId},recorded_by.eq.${fieldAgentId}`)
         .order('collection_date', { ascending: false }),
       supabase.from('susu_accounts')
         .select('*, customers(id, full_name, phone), field_agents(id, full_name, zone)')
-        .eq('field_agent_id', fieldAgentId)
         .eq('status', 'active')
         .order('created_at', { ascending: false }),
+      supabase.from('field_agents').select('id, full_name').eq('status', 'active').order('full_name'),
     ]);
 
     setCollections((collRes.data as SusuCollectionWithDetails[]) ?? []);
     setAccounts((accRes.data as SusuAccountWithDetails[]) ?? []);
+    setAgents((agentsRes.data as AgentOption[]) ?? []);
     setLoading(false);
   }, [fieldAgentId]);
 
@@ -80,8 +89,18 @@ export function AgentCollectionsPage() {
   const weekTotal = collections.filter((c) => new Date(c.collection_date) >= weekAgo).reduce((s, c) => s + Number(c.amount), 0);
   const allTimeTotal = collections.reduce((s, c) => s + Number(c.amount), 0);
 
+  // Accounts filtered by selected agent in the form
+  const formAccounts = useMemo(() => {
+    if (!formData.field_agent_id) return [];
+    return accounts.filter((a) => a.field_agent_id === formData.field_agent_id);
+  }, [accounts, formData.field_agent_id]);
+
   const openModal = () => {
-    setFormData({ ...emptyForm, collection_date: todayStr });
+    setFormData({
+      ...emptyForm,
+      field_agent_id: fieldAgentId ?? '',
+      collection_date: todayStr,
+    });
     setModalOpen(true);
   };
 
@@ -102,11 +121,16 @@ export function AgentCollectionsPage() {
       setFormError('Please select a collection date.');
       return;
     }
+    if (!formData.field_agent_id) {
+      setFormError('Please select a field agent.');
+      return;
+    }
 
     setSubmitting(true);
     const { error } = await supabase.from('susu_collections').insert({
       susu_account_id: formData.susu_account_id,
-      field_agent_id: fieldAgentId,
+      field_agent_id: formData.field_agent_id,
+      recorded_by: fieldAgentId,
       customer_id: account.customer_id,
       amount,
       collection_date: formData.collection_date,
@@ -236,13 +260,33 @@ export function AgentCollectionsPage() {
               {formError}
             </div>
           )}
+
+          <Select
+            label="Collecting For *"
+            value={formData.field_agent_id}
+            onChange={(e) => setFormData({ ...formData, field_agent_id: e.target.value, susu_account_id: '' })}
+          >
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.full_name}{a.id === fieldAgentId ? ' (Me)' : ''}
+              </option>
+            ))}
+          </Select>
+
+          {formData.field_agent_id !== fieldAgentId && (
+            <div className="rounded-lg bg-primary-50 border border-primary-100 px-4 py-2.5 text-sm text-primary-700 flex items-center gap-2">
+              <Users size={16} />
+              You are recording a collection on behalf of {agents.find((a) => a.id === formData.field_agent_id)?.full_name ?? 'another agent'}.
+            </div>
+          )}
+
           <Select
             label="Susu Account *"
             value={formData.susu_account_id}
             onChange={(e) => setFormData({ ...formData, susu_account_id: e.target.value })}
           >
             <option value="">Select an account...</option>
-            {accounts.map((a) => (
+            {formAccounts.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.account_number} — {a.customers?.full_name ?? 'Unknown'}
               </option>
@@ -250,7 +294,7 @@ export function AgentCollectionsPage() {
           </Select>
 
           {formData.susu_account_id && (() => {
-            const acc = accounts.find((a) => a.id === formData.susu_account_id);
+            const acc = formAccounts.find((a) => a.id === formData.susu_account_id);
             if (!acc) return null;
             return (
               <div className="rounded-lg bg-accent-50 border border-accent-100 p-3 text-sm">
@@ -298,7 +342,7 @@ export function AgentCollectionsPage() {
 
           <div className="flex items-center justify-end gap-3 pt-2">
             <Button type="button" variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting || !formData.susu_account_id || !formData.amount}>
+            <Button onClick={handleSubmit} disabled={submitting || !formData.field_agent_id || !formData.susu_account_id || !formData.amount}>
               {submitting ? 'Saving...' : 'Record Collection'}
             </Button>
           </div>
